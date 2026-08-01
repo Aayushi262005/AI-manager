@@ -1,7 +1,9 @@
 import React from 'react'
 import { Layers } from "lucide-react";
+import { useNavigate } from 'react-router-dom'
 
 const Navbar = () => {
+  const navigate = useNavigate();
   return (
     <div className="w-full border-b border-border bg-card/70 backdrop-blur-md fixed top-0 left-0 z-50">
         <div className="flex items-center justify-between w-full px-4 py-2">
@@ -13,7 +15,7 @@ const Navbar = () => {
                   StudyIt
                 </span>
             </div>
-            <div className=" gap-8 hidden md:flex">
+            <div className="gap-8 hidden md:flex">
               <a href="#features" className="text-lg text-muted-foreground hover:text-primary transition-colors">
                   Features
               </a>
@@ -24,14 +26,13 @@ const Navbar = () => {
                 Changelog
               </a>
             </div>
-            <div className="flex items-center gap-6"> 
-              <button className="text-base font-medium text-muted-foreground hover:text-primary transition-colors">
+            <div className="flex items-center gap-6">
+              <button onClick={() => navigate('/login')} className="text-base font-medium text-muted-foreground hover:text-primary transition-colors">
                 Sign In
               </button>
-              <button className="flex items-center gap-2 px-5 py-2 text-base font-medium text-primary-foreground bg-primary rounded-full hover:opacity-90 transition-transform duration-300 hover:-translate-y-1">
+              <button onClick={() => navigate('/signup')} className="flex items-center gap-2 px-5 py-2 text-base font-medium text-primary-foreground bg-primary rounded-full hover:opacity-90 transition-transform duration-300 hover:-translate-y-1">
                 Get started free
               </button>
-              
             </div>
         </div>
     </div>

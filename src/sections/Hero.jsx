@@ -1,9 +1,11 @@
 import React from 'react'
 import dashboard_preview from '../assets/dashboard_preview.png'
 import { Sparkles } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 
 
 const Hero = () => {
+    const navigate=useNavigate();
   return (
     <div className="w-full bg-background pt-26 pb-20">
         <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 gap-30 items-center">
@@ -23,8 +25,8 @@ const Hero = () => {
                 <p className="text-lg text-muted-foreground leading-relaxed">
                     StudyIt is an adaptive workspace that helps you plan long-term goals, execute through focused sessions, and automatically rebuilds your plan when life gets in the way.
                 </p>
-                 <button className="mt-8 flex items-center gap-2 px-4 py-2.5 text-base font-medium text-primary-foreground bg-primary rounded-full hover:opacity-90 transition-transform duration-300 hover:-translate-y-1">
-                 Get started free
+                 <button onClick={() => navigate('/signup')} className="mt-8 flex items-center gap-2 px-4 py-2.5 text-base font-medium text-primary-foreground bg-primary rounded-full hover:opacity-90 transition-transform duration-300 hover:-translate-y-1">
+                 Get started 
                 </button>
             </div>
             {/* right side */}

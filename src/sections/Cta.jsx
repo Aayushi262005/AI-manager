@@ -1,7 +1,8 @@
 import React from 'react'
 import { ArrowRight } from 'lucide-react'
-
+import { useNavigate } from 'react-router-dom'
 const Cta = () => {
+  const navigate=useNavigate();
   return (
     <div className="bg-primary w-full flex flex-col items-center justify-center py-10 px-6" id="cta">
         <div className="flex flex-col items-center justify-center text-center max-w-3xl mx-auto px-6 py-20 gap-6">
@@ -12,7 +13,7 @@ const Cta = () => {
             Join others who always know what to work on next
             </p>    
         </div>
-        <button className="group flex items-center gap-2 px-5 py-2 text-base font-bold text-primary bg-primary-foreground rounded-md hover:opacity-90 transition-transform duration-300 hover:-translate-y-1">
+        <button onClick={() => navigate('/signup')} className="group flex items-center gap-2 px-5 py-2 text-base font-bold text-primary bg-primary-foreground rounded-md hover:opacity-90 transition-transform duration-300 hover:-translate-y-1">
             Get started for free
             <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
         </button>
