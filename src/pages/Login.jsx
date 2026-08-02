@@ -9,7 +9,7 @@ const Login = () => {
 
   return (
     <div
-      className=" w-full min-h-screen flex items-center justify-center bg-cover bg-center py-8"
+      className=" w-full min-h-screen flex items-center justify-center bg-cover bg-center py-20"
       style={{ backgroundImage: `url(${signupbg})` }}
     >
       <div className="mb-10">
