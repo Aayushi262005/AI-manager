@@ -23,7 +23,7 @@ const Signup = () => {
           <p className="text-sm text-muted-foreground leading-relaxed">
              Start your productive journey here
           </p>
-          <div className="w-14 h-1 bg-gradient-to-r from-primary to-chart-3 rounded-full mx-auto mt-3" />
+          <div className="w-14 h-1 bg-gradient-to-rfrom-primary to-chart-3 rounded-full mx-auto mt-3" />
         </div>
       
         <form>
