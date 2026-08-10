@@ -3,10 +3,68 @@ import { Link, useNavigate } from 'react-router-dom'
 import { auth } from '../config/Firebase'
 import { Layers, Mail, Lock, Eye, EyeOff, ArrowLeft } from "lucide-react";
 import signupbg from '../assets/Signbg.png'
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { setPersistence, browserLocalPersistence, browserSessionPersistence } from 'firebase/auth';
 
 const Login = () => {
   const navigate = useNavigate();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword,setShowPassword]=useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+  const [error,setError]=useState('');
+  const [resetMessage,setResetMessage]=useState('');
+  const [loading,setLoading]=useState(false);
 
+  
+  const signIn = async (e) => {
+    e.preventDefault();
+    setError('');
+    setResetMessage('');
+    setLoading(true);
+    try{
+      await setPersistence(auth, rememberMe? browserLocalPersistence : browserSessionPersistence);
+      await signInWithEmailAndPassword(auth, email, password);
+      navigate('/dashboard');
+
+    }catch(error){
+      setError(getfriendlyerror(error.code));
+    }
+    finally{
+      setLoading(false);
+    }
+  };
+  const getfriendlyerror = (errorCode) => {
+    switch(errorCode){
+      case 'auth/invalid-email':
+        return 'The email address is not valid.';
+      case 'auth/user-not-found':
+      case 'auth/invalid-credential':
+        return 'No account found with these credentials.';
+      case 'auth/wrong-password':
+        return 'The password is incorrect.';
+      case 'auth/too-many-requests':
+        return 'Too many attempts. Please try again later.';
+      default:
+        return 'An error occurred. Please try again.';
+    }
+  };
+
+  const handlePasswordReset = async () => {
+  setError('');
+  setResetMessage('');
+  if(!email){
+    setError('Please enter your email address to reset your password.Check your Spam folder if you do not see the email in your inbox.');
+    return;
+  }
+  try{
+    await sendPasswordResetEmail(auth, email);
+    setResetMessage(`Password reset email sent to ${email}.`);
+  } catch (error) {
+    setError(getfriendlyerror(error.code));
+  }
+  };
   return (
     <div
       className=" w-full min-h-screen flex items-center justify-center bg-cover bg-center py-20"
@@ -29,10 +87,20 @@ const Login = () => {
           <p className="text-sm text-muted-foreground leading-relaxed">
             Login to continue your journey
           </p>
-          <div className="w-14 h-1 bg-gradient-to-r from-primary to-chart-3 rounded-full mx-auto mt-3" />
+          <div className="w-14 h-1 bg-gradient-to-rfrom-primary to-chart-3 rounded-full mx-auto mt-3" />
         </div>
+        {error &&(
+          <div className="text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-md px-3 py-2 mb-3 text-center">
+            {error}
+          </div>
+        )}
+        {resetMessage &&(
+          <div className="text-sm text-success bg-success/10 border border-success/30 rounded-md px-3 py-2 mb-3 text-center">
+            {resetMessage}
+          </div>
+        )}
 
-        <form>
+        <form onSubmit={signIn}>
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-foreground mt-1.5 text-left">
               Email
@@ -42,6 +110,8 @@ const Login = () => {
               <input
                 id="email"
                 type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter your email"
                 className="w-full pl-10 px-4 py-2 mt-1.5 text-sm text-foreground bg-background rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent mb-3"
               />
@@ -49,35 +119,53 @@ const Login = () => {
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-foreground mt-1.5 text-left">
+            <label  htmlFor="password" className="block text-sm font-medium text-foreground mt-1.5 text-left">
               Password
             </label>
             <div className="relative">
               <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
                 id="password"
-                type="password"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your password"
+                required
                 className="w-full pl-10 px-4 py-2 mt-1.5 text-sm text-foreground bg-background rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent mb-3"
               />
+              <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
           </div>
 
           <div className="flex justify-between">
             <label className="text-sm flex items-center gap-2 text-muted-foreground cursor-pointer select-none">
-              <input type="checkbox" className="w-4 h-4 rounded accent-primary" />
+              <input type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="w-4 h-4 rounded accent-primary" />
               Remember me
             </label>
-            <a href="#" className="text-sm text-primary hover:underline">
+            <button
+              type="button"
+              onClick={handlePasswordReset}
+              className="text-sm text-primary hover:underline"
+            >
               Forgot password?
-            </a>
+            </button>
           </div>
 
           <button
             type="submit"
+            disabled={loading}
             className="w-full mt-8 mb-2 items-center gap-2 px-4 py-2.5 text-base font-medium text-primary-foreground bg-primary rounded-md hover:opacity-90"
           >
-            Login
+            {loading ? 'Logging in...' : 'Login'}
           </button>
         </form>
 
