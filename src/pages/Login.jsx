@@ -3,9 +3,10 @@ import { Link, useNavigate } from 'react-router-dom'
 import { auth } from '../config/Firebase'
 import { Layers, Mail, Lock, Eye, EyeOff, ArrowLeft } from "lucide-react";
 import signupbg from '../assets/Signbg.png'
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { googleProvider } from '../config/Firebase';
+import { signInWithEmailAndPassword,signInWithPopup} from 'firebase/auth';
 import { sendPasswordResetEmail } from 'firebase/auth';
-import { setPersistence, browserLocalPersistence, browserSessionPersistence } from 'firebase/auth';
+import { setPersistence, browserLocalPersistence, browserSessionPersistence } from 'firebase/auth';``
 
 const Login = () => {
   const navigate = useNavigate();
@@ -16,6 +17,7 @@ const Login = () => {
   const [error,setError]=useState('');
   const [resetMessage,setResetMessage]=useState('');
   const [loading,setLoading]=useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   
   const signIn = async (e) => {
@@ -35,6 +37,25 @@ const Login = () => {
       setLoading(false);
     }
   };
+  const signInWithGoogle = async () => {
+    setError('');
+    setResetMessage('');
+    setLoading(true);
+    try{
+      await setPersistence(auth, rememberMe? browserLocalPersistence : browserSessionPersistence);
+      await signInWithPopup(auth, googleProvider);
+      navigate('/dashboard');
+    }
+    catch(error){
+      if(error.code !== 'auth/popup-closed-by-user'){
+        setError(getfriendlyerror(error.code));
+      }
+    }
+    finally{
+      setLoading(false);
+    }
+  };
+
   const getfriendlyerror = (errorCode) => {
     switch(errorCode){
       case 'auth/invalid-email':
@@ -177,15 +198,19 @@ const Login = () => {
 
         <button
           type="button"
+          onClick={signInWithGoogle}
+          disabled={googleLoading}
           className="w-full flex items-center justify-center gap-2 py-2.5 rounded-full bg-secondary text-secondary-foreground text-sm font-medium border border-border hover:opacity-90 hover:bg-secondary/80 transition-opacity"
         >
+          {googleLoading ? 'Waiting for Google...' : (
+            <>
           <svg width="16" height="16" viewBox="0 0 48 48">
             <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.6-6 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.5z"/>
             <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16 18.9 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4c-7.7 0-14.3 4.3-17.7 10.7z"/>
             <path fill="#4CAF50" d="M24 44c5.5 0 10.4-1.9 14.3-5.1l-6.6-5.4C29.7 35.4 27 36 24 36c-5.3 0-9.7-3.4-11.3-8.1l-6.6 5.1C9.6 39.7 16.2 44 24 44z"/>
             <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.2 5.7l6.6 5.4C40.9 36.9 44 31 44 24c0-1.3-.1-2.7-.4-3.5z"/>
           </svg>
-          Continue with Google
+          Continue with Google</>)}
         </button>
 
         <p className="text-center text-sm text-muted-foreground mt-4">
