@@ -6,7 +6,8 @@ import signupbg from '../assets/Signbg.png'
 import { googleProvider } from '../config/Firebase';
 import { signInWithEmailAndPassword,signInWithPopup} from 'firebase/auth';
 import { sendPasswordResetEmail } from 'firebase/auth';
-import { setPersistence, browserLocalPersistence, browserSessionPersistence } from 'firebase/auth';``
+import { setPersistence, browserLocalPersistence, browserSessionPersistence } from 'firebase/auth';
+import {createUserProfileIfNotExists} from '../services/userService';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -40,10 +41,11 @@ const Login = () => {
   const signInWithGoogle = async () => {
     setError('');
     setResetMessage('');
-    setLoading(true);
+    setGoogleLoading(true);
     try{
       await setPersistence(auth, rememberMe? browserLocalPersistence : browserSessionPersistence);
-      await signInWithPopup(auth, googleProvider);
+      const result = await signInWithPopup(auth, googleProvider);
+      await createUserProfileIfNotExists(result.user);
       navigate('/dashboard');
     }
     catch(error){
@@ -52,7 +54,7 @@ const Login = () => {
       }
     }
     finally{
-      setLoading(false);
+      setGoogleLoading(false);
     }
   };
 
@@ -76,7 +78,7 @@ const Login = () => {
   setError('');
   setResetMessage('');
   if(!email){
-    setError('Please enter your email address to reset your password.Check your Spam folder if you do not see the email in your inbox.');
+    setError('Please enter your email address to reset your password. Check your Spam folder if you do not see the email in your inbox.');
     return;
   }
   try{
@@ -129,6 +131,7 @@ const Login = () => {
             <div className="relative">
               <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
+                autoComplete="off"
                 id="email"
                 type="email"
                 value={email}

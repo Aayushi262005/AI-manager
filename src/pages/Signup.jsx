@@ -6,7 +6,7 @@ import { auth } from '../config/Firebase'
 import { createUserWithEmailAndPassword, updateProfile} from 'firebase/auth';
 import {googleProvider} from '../config/Firebase'
 import { signInWithPopup } from 'firebase/auth';
-
+import { createUserProfileIfNotExists } from '../services/userService';
 
 const Signup = () => {
     const navigate= useNavigate();
@@ -46,6 +46,7 @@ const Signup = () => {
         if(name){
           await updateProfile(userCredential.user, { displayName: name });
         }    
+        await createUserProfileIfNotExists(userCredential.user, { name });
         navigate('/dashboard');
       } catch (error) {
         setError(getfriendlyerror(error.code));
@@ -57,7 +58,8 @@ const Signup = () => {
         setError('');
         setGoogleLoading(true);
         try{
-          await signInWithPopup(auth, googleProvider);
+          const result = await signInWithPopup(auth, googleProvider);
+          await createUserProfileIfNotExists(result.user);
           navigate('/dashboard');
         } catch (error) {
           if(error.code !== 'auth/popup-closed-by-user'){
@@ -102,6 +104,7 @@ const Signup = () => {
             <div className="relative">
                 <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input
+                  autoComplete="off"
                   id="Name"
                   type="text"
                   value={name}
