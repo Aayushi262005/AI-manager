@@ -5,6 +5,7 @@ import { auth } from '../config/Firebase'
 import { useNavigate } from 'react-router-dom'
 import Header from '../components/Header'
 import Sidebar from '../components/Sidebar'
+import PlansSection from '../components/PlansSection'
 
 const PlaceholderSection =({title})=>(
   <div className='flex-1 flex items-center justify-center p-10'>
@@ -36,7 +37,7 @@ const Dashboard = () => {
         onLogout={handleLogout}
         isOpen={sidebarOpen}
         onClose={()=>setSidebarOpen(false)} />
-      <main className='flex-1 min-w-0'>
+      <main className='flex-1 overflow-y-auto flex flex-col min-w-0 min-h-0'>
         <Header
           activeSection={activeSection}
           onNavigate={setActiveSection}
@@ -44,7 +45,7 @@ const Dashboard = () => {
           onMenuClick={()=> setSidebarOpen(true)}/>
         <div>
           {activeSection === 'overview' && <PlaceholderSection title="Overview" />}
-          {activeSection === 'plans' && <PlaceholderSection title="Plans" />}
+          {activeSection === 'plans' && <PlansSection/>}
           {activeSection === 'planner' && <PlaceholderSection title="Planner" />}
           {activeSection === 'insights' && <PlaceholderSection title="Insights" />}
           {activeSection === 'knowledge' && <PlaceholderSection title="Knowledge" />}
