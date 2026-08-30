@@ -1,6 +1,6 @@
 import {
   collection, doc, addDoc, updateDoc, deleteDoc,
-  onSnapshot, query, orderBy, serverTimestamp, getDocs
+  onSnapshot, query, orderBy, serverTimestamp, getDocs, collectionGroup
 } from "firebase/firestore";
 import { db } from "../config/Firebase";
 
@@ -65,4 +65,23 @@ export const toggleTask = async (uid, planId, taskId, done) => {
 export const deleteTask = async (uid, planId, taskId) => {
   const taskRef = doc(db, "users", uid, "plans", planId, "tasks", taskId);
   return deleteDoc(taskRef);
+};
+
+export const setTaskPinnedDate = async (uid, planId, taskId, pinnedDate) => {
+  const taskRef = doc(db, "users", uid, "plans", planId, "tasks", taskId);
+  return updateDoc(taskRef, { pinnedDate: pinnedDate || null });
+};
+
+export const subscribeToAllTasks = (uid, callback) => {
+  const tasksGroupRef = collectionGroup(db, "tasks");
+  return onSnapshot(tasksGroupRef, (snapshot) => {
+    const tasks = snapshot.docs
+      .filter((d) => d.ref.path.startsWith(`users/${uid}/`))
+      .map((d) => ({
+        id: d.id,
+        planId: d.ref.parent.parent.id, 
+        ...d.data(),
+      }));
+    callback(tasks);
+  });
 };

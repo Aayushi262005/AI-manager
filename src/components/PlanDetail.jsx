@@ -7,6 +7,7 @@ import { computeStatus, TONE_CLASSES } from '../utils/planStatus'
 import PriorityDot from './PriorityDot'
 import AddTaskModal from './AddTaskModal'
 import EditPlanModal from './EditPlanModal'
+import { friendlyFirestoreError } from '../utils/errors'
 
 const TaskRow = ({ task, dimmed, onToggle, onDelete }) => (
   <div className={`flex items-center gap-4 px-5 py-3.5 hover:bg-muted/60 transition-colors group ${dimmed ? 'opacity-50' : ''}`}>
@@ -59,12 +60,19 @@ const PlanDetail = ({ plan, onBack }) => {
   const [activeTab, setActiveTab] = useState('tasks')
   const [showAddTask, setShowAddTask] = useState(false)
   const [showEditPlan, setShowEditPlan] = useState(false)
+  const [actionError, setActionError] = useState('')
 
   useEffect(() => {
     if (!user || !plan?.id) return
     const unsubscribe = subscribeToTasks(user.uid, plan.id, setTasks)
     return () => unsubscribe()
   }, [user, plan?.id])
+
+  useEffect(() => {
+    if (!actionError) return
+    const t = setTimeout(() => setActionError(''), 4000)
+    return () => clearTimeout(t)
+  }, [actionError])
 
   const doneTasks = tasks.filter((t) => t.done)
   const todoTasks = tasks.filter((t) => !t.done)
@@ -73,8 +81,24 @@ const PlanDetail = ({ plan, onBack }) => {
   const { days } = daysLeftInfo(plan.deadline)
   const status = computeStatus(plan, tasks)
 
-  const handleToggle = (task) => toggleTask(user.uid, plan.id, task.id, !task.done)
-  const handleDeleteTask = (taskId) => deleteTask(user.uid, plan.id, taskId)
+  const handleToggle = async (task) => {
+    setActionError('')
+    try {
+      await toggleTask(user.uid, plan.id, task.id, !task.done)
+    } catch (err) {
+      console.error(err)
+      setActionError(friendlyFirestoreError(err))
+    }
+  }
+  const handleDeleteTask = async (taskId) => {
+    setActionError('')
+    try {
+      await deleteTask(user.uid, plan.id, taskId)
+    } catch (err) {
+      console.error(err)
+      setActionError(friendlyFirestoreError(err))
+    }
+  }
   const handleAddTask = (data) => createTask(user.uid, plan.id, data)
   const handleUpdatePlan = (data) => updatePlan(user.uid, plan.id, data)
 
@@ -87,7 +111,12 @@ const PlanDetail = ({ plan, onBack }) => {
         <ChevronLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" /> Back to plans
       </button>
 
-      {/* Summary card */}
+      {actionError && (
+        <div className="bg-rose-50 border border-rose-200 rounded-xl px-4 py-2.5 mb-4 text-xs text-rose-700">
+          {actionError}
+        </div>
+      )}
+
       <div className="relative bg-card border border-border rounded-2xl shadow-sm overflow-hidden mb-5">
         <div
           className="absolute top-0 left-0 right-0 h-[3px]"
@@ -145,7 +174,6 @@ const PlanDetail = ({ plan, onBack }) => {
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="flex items-center border-b border-border mb-4">
         {['tasks', 'progress'].map((tab) => (
           <button

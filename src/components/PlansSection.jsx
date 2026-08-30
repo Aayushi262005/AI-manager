@@ -5,6 +5,7 @@ import { subscribeToPlans, createPlan, deletePlan } from '../services/planServic
 import PlanCard from './PlanCard'
 import PlanDetail from './PlanDetail'
 import NewPlanModal from './NewPlanModal'
+import { friendlyFirestoreError } from '../utils/errors'
 
 const PLAN_COLORS = ['#7C3AED', '#059669', '#DC2626', '#D97706', '#2563EB']
 
@@ -14,6 +15,7 @@ const PlansSection = () => {
   const [loading, setLoading] = useState(true)
   const [selectedPlanId, setSelectedPlanId] = useState(null)
   const [showModal, setShowModal] = useState(false)
+  const [actionError, setActionError] = useState('')
 
   useEffect(() => {
     if (!user) return
@@ -24,6 +26,12 @@ const PlansSection = () => {
     return () => unsubscribe()
   }, [user])
 
+  useEffect(() => {
+    if (!actionError) return
+    const t = setTimeout(() => setActionError(''), 4000)
+    return () => clearTimeout(t)
+  }, [actionError])
+
   const handleCreatePlan = async (data) => {
     const color = PLAN_COLORS[plans.length % PLAN_COLORS.length]
     await createPlan(user.uid, { ...data, color })
@@ -31,8 +39,14 @@ const PlansSection = () => {
 
   const handleDeletePlan = async (planId) => {
     if (!window.confirm('Delete this plan and all its tasks? This cannot be undone.')) return
-    await deletePlan(user.uid, planId)
-    if (selectedPlanId === planId) setSelectedPlanId(null)
+    setActionError('')
+    try {
+      await deletePlan(user.uid, planId)
+      if (selectedPlanId === planId) setSelectedPlanId(null)
+    } catch (err) {
+      console.error(err)
+      setActionError(friendlyFirestoreError(err))
+    }
   }
 
   // If a plan is selected, show its detail view instead of the list.
@@ -55,6 +69,12 @@ const PlansSection = () => {
           <Plus className="w-4 h-4" /> New plan
         </button>
       </div>
+
+      {actionError && (
+        <div className="bg-rose-50 border border-rose-200 rounded-xl px-4 py-2.5 mb-4 text-xs text-rose-700">
+          {actionError}
+        </div>
+      )}
 
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>

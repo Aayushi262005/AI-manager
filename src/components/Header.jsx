@@ -12,7 +12,7 @@ const SECTION_LABELS={
 }
 const Header = ({ activeSection, onNavigate, onNewClick, onMenuClick}) => {
   return (
-    <header className="sticky top-0 bg-card/85 backdrop-blur-2xl border-b border-border px-4 sm:px-7 py-3.5 flex items-center gap-3 sm:gap-4 shrink-0">
+    <header className="sticky top-0 z-20 bg-card border-b border-border px-4 sm:px-7 py-3.5 flex items-center gap-3 sm:gap-4 flex-shrink-0">
         <button
         onClick={onMenuClick}
         className='lg:hidden p-2 -ml-2 rounded-xl hover:bg-muted transition-colors'>
