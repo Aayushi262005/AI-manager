@@ -19,7 +19,7 @@ Instead of simply maintaining a to-do list, ManageIt considers task deadlines, p
 
 ## Preview
 
-![ManageIt Dashboard](./src/assets/dashboard_preview.png)
+![ManageIt Dashboard](./src/assets/live.png)
 
 ---
 
