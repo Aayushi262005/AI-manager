@@ -12,7 +12,7 @@ const Navbar = () => {
                 <Layers className="w-5 h-5 text-primary-foreground" />
               </div>
                 <span className="text-2xl font-semibold text-foreground">
-                  StudyIt
+                  ManageIt
                 </span>
             </div>
             <div className="gap-8 hidden md:flex">

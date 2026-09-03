@@ -10,8 +10,10 @@ Instead of simply maintaining a to-do list, ManageIt considers task deadlines, p
 
 ## Links
 
-- **Live Demo:** [ManageIt](YOUR_LIVE_DEMO_URL)
-- **GitHub Repository:** [ManageIt](YOUR_GITHUB_REPOSITORY_URL)
+- **Live Demo:** [ManageIt]
+(https://ai-manager-lilac.vercel.app/)
+
+- **GitHub Repository:** [ManageIt](https://github.com/Aayushi262005/AI-manager)
 
 ---
 
