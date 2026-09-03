@@ -13,7 +13,7 @@ import PriorityDot from './PriorityDot'
 import AddTaskModal from './AddTaskModal'
 import EditPlanModal from './EditPlanModal'
 import KnowledgeItemRow from './KnowledgeItemRow'
-import QuickAddLinkPopover from './Quickaddlinkpopover'
+import QuickAddLinkPopover from './QuickAddLinkPopover'
 import NoteEditor from './NoteEditor'
 import { friendlyFirestoreError } from '../utils/errors'
 

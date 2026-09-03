@@ -13,14 +13,13 @@ import { friendlyFirestoreError } from '../utils/errors'
 
 const TYPE_ICON = { note: FileText, link: Link2 }
 
-const KnowledgeSection = ({ newNoteSignal }) => {
+const KnowledgeSection = () => {
   const { user } = useAuth()
   const [plans, setPlans] = useState([])
   const [resources, setResources] = useState([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
   const [addMenuOpen, setAddMenuOpen] = useState(false)
-  const [addMenuView, setAddMenuView] = useState('root') // 'root' | 'pickPlanForNote'
   const [linkPopoverOpen, setLinkPopoverOpen] = useState(false)
   const [viewingNote, setViewingNote] = useState(null)
   const [isNewNote, setIsNewNote] = useState(false)
@@ -121,9 +120,18 @@ const KnowledgeSection = ({ newNoteSignal }) => {
     }
   }
 
-  const handleCreateNote = async (planId) => {
+  // "New note" skips the old add-resource dialog entirely — it creates a
+  // blank note straight away and drops the user right into the full-page
+  // editor to write it. If they back out without typing anything, the
+  // editor quietly deletes the blank doc again (see NoteEditor's isNew
+  // handling), so this never litters the list with "Untitled note" junk.
+  const handleCreateNote = async () => {
     setAddMenuOpen(false)
-    setAddMenuView('root')
+    if (plans.length === 0) {
+      setActionError("You'll need a plan first — notes live inside a plan.")
+      return
+    }
+    const planId = plans[0].id
     try {
       const ref = await createNote(user.uid, { title: '', body: '', planId })
       setIsNewNote(true)
@@ -141,29 +149,8 @@ const KnowledgeSection = ({ newNoteSignal }) => {
     }
   }
 
-  const handleNewNoteClick = () => {
-    if (plans.length === 0) {
-      setAddMenuOpen(false)
-      setActionError("You'll need a plan first — notes live inside a plan.")
-      return
-    }
-    if (plans.length === 1) {
-      handleCreateNote(plans[0].id)
-      return
-    }
-    setAddMenuView('pickPlanForNote')
-  }
-
-  useEffect(() => {
-    if (!newNoteSignal) return
-    if (plans.length > 1) setAddMenuOpen(true)
-    handleNewNoteClick()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [newNoteSignal])
-
   const handleOpenLinkPopover = () => {
     setAddMenuOpen(false)
-    setAddMenuView('root')
     if (plans.length === 0) {
       setActionError("You'll need a plan first — links live inside a plan.")
       return
@@ -190,7 +177,7 @@ const KnowledgeSection = ({ newNoteSignal }) => {
 
           <div className="relative">
             <button
-              onClick={() => { setAddMenuOpen((v) => !v); setAddMenuView('root') }}
+              onClick={() => setAddMenuOpen((v) => !v)}
               className="bg-gradient-to-r from-primary to-chart-2 text-primary-foreground text-sm font-semibold px-4 py-2 rounded-xl flex items-center gap-2 shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all"
             >
               <Plus className="w-3.5 h-3.5" /> Add resource
@@ -199,53 +186,22 @@ const KnowledgeSection = ({ newNoteSignal }) => {
 
             {addMenuOpen && (
               <>
-                <div className="fixed inset-0 z-40" onClick={() => { setAddMenuOpen(false); setAddMenuView('root') }} />
-                <div className="absolute right-0 top-full mt-2 w-52 bg-card border border-border rounded-xl shadow-xl overflow-hidden z-50">
-                  {addMenuView === 'root' && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={handleNewNoteClick}
-                        className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-foreground hover:bg-muted transition-colors text-left"
-                      >
-                        <FileText className="w-4 h-4 text-primary" /> New note
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleOpenLinkPopover}
-                        className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-foreground hover:bg-muted transition-colors text-left border-t border-border"
-                      >
-                        <Link2 className="w-4 h-4 text-blue-500" /> New link
-                      </button>
-                    </>
-                  )}
-
-                  {addMenuView === 'pickPlanForNote' && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => setAddMenuView('root')}
-                        className="w-full flex items-center gap-2 px-4 py-2.5 text-xs font-semibold text-muted-foreground hover:bg-muted transition-colors text-left border-b border-border"
-                      >
-                        <ChevronDown className="w-3 h-3 rotate-90" /> Back
-                      </button>
-                      <div className="px-4 pt-2 pb-1 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                        New note in…
-                      </div>
-                      <div className="max-h-56 overflow-y-auto">
-                        {plans.map((p) => (
-                          <button
-                            key={p.id}
-                            type="button"
-                            onClick={() => handleCreateNote(p.id)}
-                            className="w-full flex items-center px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors text-left truncate"
-                          >
-                            {p.name}
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  )}
+                <div className="fixed inset-0 z-40" onClick={() => setAddMenuOpen(false)} />
+                <div className="absolute right-0 top-full mt-2 w-48 bg-card border border-border rounded-xl shadow-xl overflow-hidden z-50">
+                  <button
+                    type="button"
+                    onClick={handleCreateNote}
+                    className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-foreground hover:bg-muted transition-colors text-left"
+                  >
+                    <FileText className="w-4 h-4 text-primary" /> New note
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleOpenLinkPopover}
+                    className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-foreground hover:bg-muted transition-colors text-left border-t border-border"
+                  >
+                    <Link2 className="w-4 h-4 text-blue-500" /> New link
+                  </button>
                 </div>
               </>
             )}

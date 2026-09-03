@@ -2,10 +2,22 @@
 
 ### Intelligent Productivity Planner
 
-ManageIt is a productivity and planning application that helps users turn larger goals into actionable tasks and automatically organize their workload around their available time. 
-
+ManageIt is a productivity and planning application that helps users turn larger goals into actionable tasks and automatically organize their workload around their available time.
 
 Instead of simply maintaining a to-do list, ManageIt considers task deadlines, priorities, estimated effort, progress, and daily capacity to generate a realistic schedule. Users can then review and manually adjust their schedule through an interactive planner.
+
+---
+
+## Links
+
+- **Live Demo:** [ManageIt](YOUR_LIVE_DEMO_URL)
+- **GitHub Repository:** [ManageIt](YOUR_GITHUB_REPOSITORY_URL)
+
+---
+
+## Preview
+
+![ManageIt Dashboard](./src/assets/dashboard_preview.png)
 
 ---
 
@@ -108,44 +120,44 @@ Current insights include:
 ManageIt uses a React-based frontend with Firebase providing authentication and persistent data storage.
 
     ManageIt
-       │
-       ├── React Frontend
-       │      │
-       │      ├── Plans
-       │      ├── Planner
-       │      ├── Insights
-       │      ├── Focus Sessions
-       │      └── Knowledge
-       │
-       └── Firebase
-              │
-              ├── Authentication
-              └── Cloud Firestore
+       |
+       +-- React Frontend
+       |      |
+       |      +-- Plans
+       |      +-- Planner
+       |      +-- Insights
+       |      +-- Focus Sessions
+       |      +-- Knowledge
+       |
+       +-- Firebase
+              |
+              +-- Authentication
+              +-- Cloud Firestore
 
 ### Scheduling Flow
 
     Plans + Tasks
-         │
-         ▼
+         |
+         v
     Filter completed tasks
-         │
-         ▼
+         |
+         v
     Calculate remaining work
-         │
-         ▼
+         |
+         v
     Sort by deadline + priority
-         │
-         ▼
+         |
+         v
     Apply daily capacity
-         │
-         ├── Pinned dates
-         ├── Capacity overrides
-         └── Task splitting
-         │
-         ▼
+         |
+         +-- Pinned dates
+         +-- Capacity overrides
+         +-- Task splitting
+         |
+         v
     Generate schedule
-         │
-         ▼
+         |
+         v
     Warnings for infeasible workload
 
 ---
@@ -269,11 +281,11 @@ The application will be available at the local Vite development URL.
 
 ## Why ManageIt?
 
-Traditional task managers tell you **what** needs to be done.
+Traditional task managers tell you what needs to be done.
 
 ManageIt also tries to answer:
 
-> **When should I actually do it?**
+> When should I actually do it?
 
 By combining task management with workload-aware scheduling, the application aims to make planning more realistic for users who have limited time and multiple deadlines.
 
@@ -295,4 +307,4 @@ By combining task management with workload-aware scheduling, the application aim
 
 ManageIt is an actively developed project focused on combining task management with intelligent, workload-aware scheduling.
 
-The application is being developed incrementally, with additional features and refinements planned for future versions..
+The application is being developed incrementally, with additional features and refinements planned for future versions.
