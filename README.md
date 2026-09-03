@@ -2,7 +2,8 @@
 
 ### Intelligent Productivity Planner
 
-ManageIt is a productivity and planning application that helps users turn larger goals into actionable tasks and automatically organize their workload around their available time.
+ManageIt is a productivity and planning application that helps users turn larger goals into actionable tasks and automatically organize their workload around their available time. 
+
 
 Instead of simply maintaining a to-do list, ManageIt considers task deadlines, priorities, estimated effort, progress, and daily capacity to generate a realistic schedule. Users can then review and manually adjust their schedule through an interactive planner.
 
