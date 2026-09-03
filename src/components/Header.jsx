@@ -1,5 +1,5 @@
-import React from 'react'
-import { Search , Bell, Brain, Plus, Menu} from 'lucide-react'
+import React, { useState } from 'react'
+import { Bell, Brain, Plus, Menu, ChevronDown, Target, ListTodo, FileText } from 'lucide-react'
 
 const SECTION_LABELS={
     overview: 'Overview',
@@ -10,7 +10,15 @@ const SECTION_LABELS={
     copilot: 'AI Copilot',
     settings: 'Settings',
 }
-const Header = ({ activeSection, onNavigate, onNewClick, onMenuClick}) => {
+
+const Header = ({ activeSection, onNavigate, onNewPlan, onNewTask, onNewNote, onMenuClick }) => {
+  const [newMenuOpen, setNewMenuOpen] = useState(false)
+
+  const handleSelect = (action) => {
+    setNewMenuOpen(false)
+    action()
+  }
+
   return (
     <header className="sticky top-0 z-20 bg-card border-b border-border px-4 sm:px-7 py-3.5 flex items-center gap-3 sm:gap-4 flex-shrink-0">
         <button
@@ -32,14 +40,47 @@ const Header = ({ activeSection, onNavigate, onNewClick, onMenuClick}) => {
                 <Brain className='w-3.5 h-3.5'/>
                 <span className='hidden sm:inline'>Adjust it</span>
             </button>
-            <button
-            onClick={onNewClick}
-            className='bg-gradient-to-r from-primary to-chart-2 text-primary-foreground text-sm font-semibold px-3 sm:px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200'>
-                <Plus className='h-3.5 w-3.5 '/>
-                <span className='hidden sm:inline'>
-                    New
-                </span>
-            </button>
+
+            <div className="relative">
+              <button
+              onClick={() => setNewMenuOpen((v) => !v)}
+              className='bg-gradient-to-r from-primary to-chart-2 text-primary-foreground text-sm font-semibold px-3 sm:px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200'>
+                  <Plus className='h-3.5 w-3.5 '/>
+                  <span className='hidden sm:inline'>
+                      New
+                  </span>
+                  <ChevronDown className='h-3.5 w-3.5 hidden sm:inline' />
+              </button>
+
+              {newMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setNewMenuOpen(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-48 bg-card border border-border rounded-xl shadow-xl overflow-hidden z-50">
+                    <button
+                      type="button"
+                      onClick={() => handleSelect(onNewPlan)}
+                      className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-foreground hover:bg-muted transition-colors text-left"
+                    >
+                      <Target className="w-4 h-4 text-primary" /> New plan
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSelect(onNewTask)}
+                      className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-foreground hover:bg-muted transition-colors text-left border-t border-border"
+                    >
+                      <ListTodo className="w-4 h-4 text-emerald-600" /> New task
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSelect(onNewNote)}
+                      className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-foreground hover:bg-muted transition-colors text-left border-t border-border"
+                    >
+                      <FileText className="w-4 h-4 text-blue-500" /> New note
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
 
         </div>
     </header>

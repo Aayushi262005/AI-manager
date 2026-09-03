@@ -1,20 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
   ListChecks, Clock, AlertTriangle, CalendarClock, TrendingUp, Flag,
-  Plus, CalendarDays, Settings as SettingsIcon, CheckCircle2, Circle,
+  Plus, CalendarDays, Settings as SettingsIcon, CheckCircle2, Circle, Play,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { subscribeToPlans, subscribeToTasks, toggleTask } from '../services/planService'
 import { subscribeToCapacitySettings, subscribeToOverrides } from '../services/capacityService'
 import { allocateSchedule, toDateStr } from '../utils/scheduler'
 import { computeStatus, TONE_CLASSES } from '../utils/planStatus'
+import { planProgressPct, remainingMinutesForTask } from '../utils/progress'
 import { formatMins, daysLeftInfo } from '../utils/format'
 import { friendlyFirestoreError } from '../utils/errors'
 import PriorityDot from './PriorityDot'
 
 const todayStr = () => toDateStr(new Date())
-
-// ── Small stat tile used in the top row ──
 const StatCard = ({ icon: Icon, label, value, sub }) => (
   <div className="bg-card border border-border rounded-2xl p-5 shadow-sm">
     <div className="w-9 h-9 rounded-xl bg-accent flex items-center justify-center mb-3">
@@ -26,12 +25,9 @@ const StatCard = ({ icon: Icon, label, value, sub }) => (
   </div>
 )
 
-const OverviewSection = ({ onNavigate }) => {
+const OverviewSection = ({ onNavigate, onStartFocus }) => {
   const { user } = useAuth()
 
-  // Same subscription shape as PlannerSection: one query for plans, then a
-  // scoped tasks listener per plan (instead of one big collection-group
-  // query across every user's tasks in the database).
   const [plans, setPlans] = useState([])
   const [plansLoaded, setPlansLoaded] = useState(false)
   const [tasksByPlan, setTasksByPlan] = useState({})
@@ -73,9 +69,6 @@ const OverviewSection = ({ onNavigate }) => {
   )
   const loading = !plansLoaded || (plans.length > 0 && !plans.every((p) => loadedPlanIds.has(p.id)))
 
-  // The exact same scheduler the Planner uses — Overview and Planner will
-  // never disagree about what "today" looks like, because there is only
-  // one place that computes it.
   const { schedule } = useMemo(() => {
     const plansWithTasks = plans.map((plan) => ({
       ...plan,
@@ -91,7 +84,7 @@ const OverviewSection = ({ onNavigate }) => {
   const todaysCapacityHours = overrides[today] ?? defaultHours
 
   const incompleteTasks = allTasks.filter((t) => !t.done)
-  const remainingMinutes = incompleteTasks.reduce((sum, t) => sum + (t.estMinutes || 0), 0)
+  const remainingMinutes = incompleteTasks.reduce((sum, t) => sum + remainingMinutesForTask(t), 0)
 
   const highPriorityTasks = useMemo(() => (
     incompleteTasks
@@ -124,7 +117,7 @@ const OverviewSection = ({ onNavigate }) => {
 
   const totalTasks = allTasks.length
   const totalDone = allTasks.filter((t) => t.done).length
-  const overallProgressPct = totalTasks ? Math.round((totalDone / totalTasks) * 100) : 0
+  const overallProgressPct = planProgressPct(allTasks)
 
   // Shared by every checkbox on this page — a failed write shows a real
   // reason instead of silently doing nothing.
@@ -202,19 +195,28 @@ const OverviewSection = ({ onNavigate }) => {
                       key={task.key || task.id}
                       className="flex items-center gap-3 px-5 py-3.5 hover:bg-muted/60 transition-colors"
                     >
-                      <button onClick={() => handleToggle(task)} className="flex-shrink-0">
+                      <button onClick={() => handleToggle(task)} className="shrink-0">
                         {task.done
                           ? <CheckCircle2 className="w-5 h-5 text-emerald-500" />
                           : <Circle className="w-5 h-5 text-border" />}
                       </button>
-                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: task.planColor }} />
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: task.planColor }} />
                       <span className="flex-1 min-w-0 truncate text-sm text-foreground">
                         {task.title}
                         {task.isSplit && <span className="ml-1.5 text-[10px] text-muted-foreground align-middle">(part)</span>}
                       </span>
-                      <span className="hidden sm:inline text-xs text-muted-foreground flex-shrink-0">{task.planName}</span>
+                      <span className="hidden sm:inline text-xs text-muted-foreground shrink-0">{task.planName}</span>
                       <PriorityDot priority={task.priority} />
-                      <span className="text-xs text-muted-foreground flex-shrink-0">{formatMins(task.minutes ?? task.estMinutes)}</span>
+                      <span className="text-xs text-muted-foreground shrink-0">{formatMins(task.minutes ?? task.estMinutes)}</span>
+                      {!task.done && (
+                        <button
+                          onClick={() => onStartFocus(task)}
+                          title="Start a focus session on this task"
+                          className="shrink-0 p-1.5 rounded-lg text-primary hover:bg-accent transition-colors"
+                        >
+                          <Play className="w-3.5 h-3.5 fill-current" />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -239,7 +241,7 @@ const OverviewSection = ({ onNavigate }) => {
                         className="w-full flex items-center justify-between px-5 py-3 hover:bg-muted/60 transition-colors text-left"
                       >
                         <span className="text-sm text-foreground truncate">{plan.name}</span>
-                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${TONE_CLASSES[status.tone]}`}>
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${TONE_CLASSES[status.tone]}`}>
                           {status.label}
                         </span>
                       </button>
@@ -266,7 +268,7 @@ const OverviewSection = ({ onNavigate }) => {
                           className="w-full flex items-center justify-between px-5 py-3 hover:bg-muted/60 transition-colors text-left"
                         >
                           <span className="text-sm text-foreground truncate">{plan.name}</span>
-                          <span className={`text-xs flex-shrink-0 ${urgent ? 'text-destructive font-semibold' : 'text-muted-foreground'}`}>
+                          <span className={`text-xs shrink-0 ${urgent ? 'text-destructive font-semibold' : 'text-muted-foreground'}`}>
                             {label}
                           </span>
                         </button>
@@ -290,13 +292,20 @@ const OverviewSection = ({ onNavigate }) => {
               <div className="divide-y divide-border">
                 {highPriorityTasks.map((task) => (
                   <div key={task.id} className="flex items-center gap-3 px-5 py-3.5 hover:bg-muted/60 transition-colors">
-                    <button onClick={() => handleToggle(task)} className="flex-shrink-0">
+                    <button onClick={() => handleToggle(task)} className="shrink-0">
                       <Circle className="w-5 h-5 text-border" />
                     </button>
-                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: task.plan.color }} />
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: task.plan.color }} />
                     <span className="flex-1 min-w-0 truncate text-sm text-foreground">{task.title}</span>
-                    <span className="hidden sm:inline text-xs text-muted-foreground flex-shrink-0">{task.plan.name}</span>
-                    <span className="text-xs text-muted-foreground flex-shrink-0">{formatMins(task.estMinutes)}</span>
+                    <span className="hidden sm:inline text-xs text-muted-foreground shrink-0">{task.plan.name}</span>
+                    <span className="text-xs text-muted-foreground shrink-0">{formatMins(remainingMinutesForTask(task))}</span>
+                    <button
+                      onClick={() => onStartFocus(task)}
+                      title="Start a focus session on this task"
+                      className="shrink-0 p-1.5 rounded-lg text-primary hover:bg-accent transition-colors"
+                    >
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                    </button>
                   </div>
                 ))}
               </div>

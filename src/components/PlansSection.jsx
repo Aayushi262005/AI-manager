@@ -6,10 +6,9 @@ import PlanCard from './PlanCard'
 import PlanDetail from './PlanDetail'
 import NewPlanModal from './NewPlanModal'
 import { friendlyFirestoreError } from '../utils/errors'
+import { PLAN_COLORS } from './ColorSwatchPicker'
 
-const PLAN_COLORS = ['#7C3AED', '#059669', '#DC2626', '#D97706', '#2563EB']
-
-const PlansSection = () => {
+const PlansSection = ({ onStartFocus, newPlanSignal }) => {
   const { user } = useAuth()
   const [plans, setPlans] = useState([])
   const [loading, setLoading] = useState(true)
@@ -32,10 +31,11 @@ const PlansSection = () => {
     return () => clearTimeout(t)
   }, [actionError])
 
-  const handleCreatePlan = async (data) => {
-    const color = PLAN_COLORS[plans.length % PLAN_COLORS.length]
-    await createPlan(user.uid, { ...data, color })
-  }
+  useEffect(() => {
+    if (newPlanSignal) setShowModal(true)
+  }, [newPlanSignal])
+
+  const handleCreatePlan = (data) => createPlan(user.uid, data)
 
   const handleDeletePlan = async (planId) => {
     if (!window.confirm('Delete this plan and all its tasks? This cannot be undone.')) return
@@ -50,9 +50,23 @@ const PlansSection = () => {
   }
 
   // If a plan is selected, show its detail view instead of the list.
+  // Note: the "New plan" modal below must still be able to render here —
+  // triggering it (e.g. via the header's New button) while a plan detail
+  // view is open should still open the modal, not silently do nothing.
   const selectedPlan = plans.find((p) => p.id === selectedPlanId)
   if (selectedPlan) {
-    return <PlanDetail plan={selectedPlan} onBack={() => setSelectedPlanId(null)} />
+    return (
+      <>
+        <PlanDetail plan={selectedPlan} onBack={() => setSelectedPlanId(null)} onStartFocus={onStartFocus} />
+        {showModal && (
+          <NewPlanModal
+            onClose={() => setShowModal(false)}
+            onCreate={handleCreatePlan}
+            defaultColor={PLAN_COLORS[plans.length % PLAN_COLORS.length]}
+          />
+        )}
+      </>
+    )
   }
 
   return (
@@ -115,7 +129,11 @@ const PlansSection = () => {
       )}
 
       {showModal && (
-        <NewPlanModal onClose={() => setShowModal(false)} onCreate={handleCreatePlan} />
+        <NewPlanModal
+          onClose={() => setShowModal(false)}
+          onCreate={handleCreatePlan}
+          defaultColor={PLAN_COLORS[plans.length % PLAN_COLORS.length]}
+        />
       )}
     </div>
   )

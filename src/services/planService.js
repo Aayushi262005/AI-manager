@@ -53,13 +53,14 @@ export const createTask = async (uid, planId, { title, estMinutes, priority }) =
     estMinutes: estMinutes || 30,
     priority: priority || "medium",
     done: false,
+    progress: 0,
     createdAt: serverTimestamp(),
   });
 };
 
 export const toggleTask = async (uid, planId, taskId, done) => {
   const taskRef = doc(db, "users", uid, "plans", planId, "tasks", taskId);
-  return updateDoc(taskRef, { done });
+  return updateDoc(taskRef, { done, ...(done ? { progress: 100 } : {}) });
 };
 
 export const deleteTask = async (uid, planId, taskId) => {
@@ -70,6 +71,11 @@ export const deleteTask = async (uid, planId, taskId) => {
 export const setTaskPinnedDate = async (uid, planId, taskId, pinnedDate) => {
   const taskRef = doc(db, "users", uid, "plans", planId, "tasks", taskId);
   return updateDoc(taskRef, { pinnedDate: pinnedDate || null });
+};
+
+export const updateTaskEstimate = async (uid, planId, taskId, estMinutes) => {
+  const taskRef = doc(db, "users", uid, "plans", planId, "tasks", taskId);
+  return updateDoc(taskRef, { estMinutes: Math.max(5, Math.round(estMinutes)) });
 };
 
 export const subscribeToAllTasks = (uid, callback) => {

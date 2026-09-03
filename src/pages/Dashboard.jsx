@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { signOut } from 'firebase/auth'
 import { auth } from '../config/Firebase'
@@ -8,7 +8,13 @@ import Sidebar from '../components/Sidebar'
 import PlansSection from '../components/PlansSection'
 import PlannerSection from '../components/PlannerSection'
 import OverviewSection from '../components/OverviewSection'
+import InsightsSection from '../components/InsightsSection'
+import KnowledgeSection from '../components/KnowledgeSection'
 import CapacitySettings from '../components/CapacitySettings'
+import FocusBar from '../components/FocusBar'
+import FocusCompleteModal from '../components/FocusCompleteModal'
+import { createFocusSession, updateTaskProgress } from '../services/focusService'
+import { friendlyFirestoreError } from '../utils/errors'
 
 const PlaceholderSection = ({ title }) => (
   <div className="flex-1 flex items-center justify-center p-10">
@@ -24,11 +30,72 @@ const Dashboard = () => {
   const navigate = useNavigate()
   const [activeSection, setActiveSection] = useState('overview')
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [focusSession, setFocusSession] = useState(null)
+  const [completedSession, setCompletedSession] = useState(null)
+  const [focusError, setFocusError] = useState('')
+
+  useEffect(() => {
+    if (!focusSession) return
+    const interval = setInterval(() => {
+      setFocusSession((prev) => {
+        if (!prev) return prev
+        return { ...prev, elapsed: Math.floor((Date.now() - prev.startedAt.getTime()) / 1000) }
+      })
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [focusSession?.startedAt])
+
+  useEffect(() => {
+    if (!focusError) return
+    const t = setTimeout(() => setFocusError(''), 4000)
+    return () => clearTimeout(t)
+  }, [focusError])
 
   const handleLogout = async () => {
     await signOut(auth)
     navigate('/login')
   }
+
+  const handleStartFocus = (task) => {
+    if (focusSession) {
+      setFocusError('Finish your current focus session before starting another one.')
+      return
+    }
+    setFocusSession({ task, planId: task.planId, startedAt: new Date(), elapsed: 0 })
+  }
+
+  const handleEndFocus = () => {
+    if (!focusSession) return
+    const endedAt = new Date()
+    const durationMinutes = Math.max(1, Math.round((endedAt.getTime() - focusSession.startedAt.getTime()) / 60000))
+    setCompletedSession({
+      task: focusSession.task,
+      planId: focusSession.planId,
+      startedAt: focusSession.startedAt,
+      endedAt,
+      durationMinutes,
+    })
+    setFocusSession(null)
+  }
+
+  const handleSaveProgress = async (progressValue) => {
+    const { task, planId, startedAt, endedAt, durationMinutes } = completedSession
+    const [sessionResult, progressResult] = await Promise.allSettled([
+      createFocusSession(user.uid, planId, task.id, { startedAt, endedAt, durationMinutes }),
+      updateTaskProgress(user.uid, planId, task.id, progressValue),
+    ])
+
+    if (progressResult.status === 'rejected') {
+      console.error(progressResult.reason)
+      setFocusError(`Progress wasn't saved: ${friendlyFirestoreError(progressResult.reason)}`)
+    } else if (sessionResult.status === 'rejected') {
+      console.error(sessionResult.reason)
+      setFocusError(`Progress saved, but the session log wasn't: ${friendlyFirestoreError(sessionResult.reason)}`)
+    }
+    setCompletedSession(null)
+  }
+
+  const handleDiscardSession = () => setCompletedSession(null)
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -50,11 +117,11 @@ const Dashboard = () => {
         />
 
         <div className="flex-1 flex min-h-0">
-          {activeSection === 'overview' && <OverviewSection onNavigate={setActiveSection} />}
-          {activeSection === 'plans' && <PlansSection />}
+          {activeSection === 'overview' && <OverviewSection onNavigate={setActiveSection} onStartFocus={handleStartFocus} />}
+          {activeSection === 'plans' && <PlansSection onStartFocus={handleStartFocus} />}
           {activeSection === 'planner' && <PlannerSection />}
-          {activeSection === 'insights' && <PlaceholderSection title="Insights" />}
-          {activeSection === 'knowledge' && <PlaceholderSection title="Knowledge" />}
+          {activeSection === 'insights' && <InsightsSection onNavigate={setActiveSection} />}
+          {activeSection === 'knowledge' && <KnowledgeSection />}
           {activeSection === 'copilot' && <PlaceholderSection title="AI Copilot" />}
           {activeSection === 'settings' && (
             <div className="flex-1 p-6 sm:p-8">
@@ -69,6 +136,25 @@ const Dashboard = () => {
           )}
         </div>
       </main>
+
+      {focusError && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-rose-50 border border-rose-200 rounded-xl px-4 py-2.5 text-xs text-rose-700 shadow-lg">
+          {focusError}
+        </div>
+      )}
+
+      {focusSession && (
+        <FocusBar task={focusSession.task} elapsedSeconds={focusSession.elapsed} onEnd={handleEndFocus} />
+      )}
+
+      {completedSession && (
+        <FocusCompleteModal
+          task={completedSession.task}
+          durationMinutes={completedSession.durationMinutes}
+          onSave={handleSaveProgress}
+          onDiscard={handleDiscardSession}
+        />
+      )}
     </div>
   )
 }

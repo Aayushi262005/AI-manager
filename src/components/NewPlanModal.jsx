@@ -1,10 +1,12 @@
 import React, { useState } from 'react'
 import { X } from 'lucide-react'
+import ColorSwatchPicker, { PLAN_COLORS } from './ColorSwatchPicker'
 
-const NewPlanModal = ({ onClose, onCreate }) => {
+const NewPlanModal = ({ onClose, onCreate, defaultColor }) => {
   const [name, setName] = useState('')
   const [deadline, setDeadline] = useState('')
   const [description, setDescription] = useState('')
+  const [color, setColor] = useState(defaultColor || PLAN_COLORS[0])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -21,7 +23,7 @@ const NewPlanModal = ({ onClose, onCreate }) => {
     setError('')
     setSaving(true)
     try {
-      await onCreate({ name: name.trim(), deadline, description: description.trim() })
+      await onCreate({ name: name.trim(), deadline, description: description.trim(), color })
       onClose()
     } catch (err) {
       setError('Something went wrong — try again.')
@@ -82,6 +84,11 @@ const NewPlanModal = ({ onClose, onCreate }) => {
               rows={2}
               className="w-full px-3 py-2 text-sm bg-muted border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring resize-none"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">Color</label>
+            <ColorSwatchPicker value={color} onChange={setColor} />
           </div>
 
           <button

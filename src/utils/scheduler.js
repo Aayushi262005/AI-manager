@@ -1,3 +1,5 @@
+import { remainingMinutesForTask } from './progress'
+
 export const toDateStr = (date) => {
   const y = date.getFullYear()
   const m = String(date.getMonth() + 1).padStart(2, '0')
@@ -30,13 +32,22 @@ export const allocateSchedule = ({ plans, defaultHours, overrides = {}, today = 
   plans.forEach((plan) => {
     plan.tasks
       .filter((t) => !t.done)
-      .forEach((t) => allTasks.push({
+      .map((t) => ({
         ...t,
+        // Original estimate adjusted for progress already made — the
+        // scheduler allocates capacity for what's actually left, not what
+        // the task originally cost. See utils/progress.js.
+        estMinutes: remainingMinutesForTask(t),
         planId: plan.id,
         planName: plan.name,
         planColor: plan.color,
         planDeadline: plan.deadline,
       }))
+      // A task can be !done but have 0 minutes remaining (e.g. progress
+      // was pushed to 100 without the checkbox being ticked yet) — don't
+      // let a zero-length item occupy a slot in the schedule.
+      .filter((t) => t.estMinutes > 0)
+      .forEach((t) => allTasks.push(t))
   })
 
   if (allTasks.length === 0) return { schedule: [], warnings: [] }

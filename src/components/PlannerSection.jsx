@@ -5,8 +5,8 @@ import {
   CalendarClock, GripVertical,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { subscribeToPlans, subscribeToTasks, toggleTask, setTaskPinnedDate } from '../services/planService'
-import { subscribeToCapacitySettings, subscribeToOverrides } from '../services/capacityService'
+import { subscribeToPlans, subscribeToTasks, toggleTask, setTaskPinnedDate, updateTaskEstimate } from '../services/planService'
+import { subscribeToCapacitySettings, subscribeToOverrides, setDayOverride, clearDayOverride } from '../services/capacityService'
 import { allocateSchedule, addDays, toDateStr } from '../utils/scheduler'
 import { formatMins } from '../utils/format'
 import PriorityDot from './PriorityDot'
@@ -38,10 +38,6 @@ const PlannerSection = () => {
   const [loadedPlanIds, setLoadedPlanIds] = useState(new Set())
   const [dragOverDate, setDragOverDate] = useState(null) // which day cell is currently a drop target
 
-  // Plans and their tasks are separate listener sets: plans is one small
-  // query, and each plan gets its own scoped tasks listener (instead of one
-  // giant collection-group query across every user's tasks in the whole
-  // database, which is what used to make this feel slow).
   useEffect(() => {
     if (!user) return
     const unsub1 = subscribeToPlans(user.uid, (p) => { setPlans(p); setPlansLoaded(true) })
@@ -61,14 +57,13 @@ const PlannerSection = () => {
     return () => unsubs.forEach((u) => u())
   }, [user, plans])
 
-  // Derived, not stored: a plan that's since been deleted just falls out
-  // of `plans`, so its stale entry here is filtered out on the next render
-  // instead of needing an explicit "clear tasks" effect.
   const planIds = useMemo(() => new Set(plans.map((p) => p.id)), [plans])
   const allTasks = useMemo(
     () => Object.entries(tasksByPlan).filter(([planId]) => planIds.has(planId)).flatMap(([, tasks]) => tasks),
     [tasksByPlan, planIds]
   )
+
+  const rawTaskById = useMemo(() => Object.fromEntries(allTasks.map((t) => [t.id, t])), [allTasks])
   const loading = !plansLoaded || (plans.length > 0 && !plans.every((p) => loadedPlanIds.has(p.id)))
 
   const { schedule, warnings } = useMemo(() => {
@@ -104,9 +99,6 @@ const PlannerSection = () => {
 
   const selectDate = (d) => { setSelectedDate(d); setMovingTaskId(null) }
 
-  // Every Firestore-writing action goes through this so a failure is
-  // always visible instead of silently doing nothing — and shows the
-  // *actual* reason (e.g. a permissions error), not a generic guess.
   const runAction = async (fn, successMsg) => {
     try {
       await fn()
@@ -130,10 +122,22 @@ const PlannerSection = () => {
     runAction(() => setTaskPinnedDate(user.uid, task.planId, task.id, newDateStr))
   const handleUnpin = (task) =>
     runAction(() => setTaskPinnedDate(user.uid, task.planId, task.id, null), `"${task.title}" set back to auto-scheduled.`)
+  const handleUpdateEstimate = (task, minutes) =>
+    runAction(
+      () => updateTaskEstimate(user.uid, task.planId, task.id, minutes),
+      `Updated "${task.title}" to ${formatMins(minutes)}.`
+    )
+  const handleSetDayCapacity = (hours) =>
+    runAction(
+      () => setDayOverride(user.uid, selectedDate, hours),
+      `Capacity for this day set to ${hours}h.`
+    )
+  const handleClearDayCapacity = () =>
+    runAction(
+      () => clearDayOverride(user.uid, selectedDate),
+      'Reset this day to your default capacity.'
+    )
 
-  // Drag-and-drop: only the small grip handle on a task row is draggable
-  // (not the whole row), so it can never intercept a click on the checkbox
-  // next to it. Drop it on any day cell in the week/month view to move it.
   const handleDragStart = (e, task) => {
     e.dataTransfer.setData('text/plain', JSON.stringify({ taskId: task.id, planId: task.planId }))
     e.dataTransfer.effectAllowed = 'move'
@@ -194,7 +198,7 @@ const PlannerSection = () => {
 
       {warnings.length > 0 && (
         <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 mb-5 flex items-start gap-3">
-          <AlertTriangle className="w-4 h-4 text-rose-500 flex-shrink-0 mt-0.5" />
+          <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
           <div className="space-y-1">
             {warnings.slice(0, 3).map((w, i) => (
               <p key={i} className="text-xs text-rose-700">{w.message}</p>
@@ -253,6 +257,7 @@ const PlannerSection = () => {
             />
           )}
 
+          {view === 'week' && (
           <div className="mt-6">
             <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
               <h3 className="text-sm font-semibold text-foreground">
@@ -260,16 +265,13 @@ const PlannerSection = () => {
               </h3>
 
               <div className="flex items-center gap-2 flex-wrap">
-                {/* Read-only — capacity is set once in Settings and applies
-                    everywhere (including here), instead of having a second
-                    place to edit it that can drift out of sync. */}
-                <span
-                  className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted rounded-xl px-2.5 py-1.5"
-                  title="Set in Settings → Study capacity"
-                >
-                  <Clock className="w-3.5 h-3.5" />
-                  {selectedDay ? `${formatMins(selectedDay.usedMinutes)} / ${selectedDayCapacityHours}h` : `${selectedDayCapacityHours}h capacity`}
-                </span>
+                <CapacityBadge
+                  selectedDay={selectedDay}
+                  capacityHours={selectedDayCapacityHours}
+                  hasOverride={overrides[selectedDate] !== undefined}
+                  onSetOverride={handleSetDayCapacity}
+                  onClearOverride={handleClearDayCapacity}
+                />
 
                 {selectedDay && selectedDay.items.length > 0 && (
                   <button
@@ -316,6 +318,7 @@ const PlannerSection = () => {
                   <TaskRow
                     key={task.key || task.id}
                     task={task}
+                    rawEstMinutes={rawTaskById[task.id]?.estMinutes ?? task.estMinutes}
                     currentDate={selectedDay.date}
                     isMoving={movingTaskId === (task.key || task.id)}
                     onToggle={() => handleToggle(task)}
@@ -323,78 +326,187 @@ const PlannerSection = () => {
                     onPickDate={(dateStr) => { movetaskTo(task, dateStr); setMovingTaskId(null) }}
                     onUnpin={() => handleUnpin(task)}
                     onDragStart={(e) => handleDragStart(e, task)}
+                    onSaveDuration={(minutes) => handleUpdateEstimate(task, minutes)}
                   />
                 ))}
               </div>
             )}
           </div>
+          )}
         </>
       )}
     </div>
   )
 }
 
-// ── One task row inside the selected-day panel ──
-const TaskRow = ({ task, currentDate, isMoving, onToggle, onOpenMove, onPickDate, onUnpin, onDragStart }) => (
-  <div className="flex items-center gap-2 px-3 sm:px-5 py-3.5 hover:bg-muted/60 transition-colors">
-    {/* Only this handle is draggable — not the row — so it can never
-        intercept a click on the checkbox or title next to it. */}
-    <span
-      draggable
-      onDragStart={onDragStart}
-      title="Drag to another day"
-      className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground flex-shrink-0"
-    >
-      <GripVertical className="w-3.5 h-3.5" />
-    </span>
-    <span className="flex-shrink-0 cursor-pointer" onClick={onToggle}>
-      {task.done ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : <Circle className="w-5 h-5 text-border" />}
-    </span>
-    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: task.planColor }} />
-    <span className="flex-1 text-sm text-foreground truncate cursor-pointer min-w-[60px]" onClick={onToggle}>
-      {task.title}
-      {task.isSplit && <span className="ml-1.5 text-[10px] text-muted-foreground align-middle">(part)</span>}
-    </span>
-    <span className="hidden sm:inline text-xs text-muted-foreground flex-shrink-0">{task.planName}</span>
-    <PriorityDot priority={task.priority} />
-    <span className="text-xs text-muted-foreground flex-shrink-0">{formatMins(task.minutes ?? task.estMinutes)}</span>
+// ── Capacity for whichever day is selected — click to override just that
+// day, independent of the account-wide default set in Settings ──
+const CapacityBadge = ({ selectedDay, capacityHours, hasOverride, onSetOverride, onClearOverride }) => {
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(capacityHours)
 
-    {/* Single, simple way to move a task: pick a new date. */}
-    <div className="relative flex items-center gap-1 flex-shrink-0">
+  const startEdit = () => {
+    setValue(capacityHours)
+    setEditing(true)
+  }
+  const commit = () => {
+    setEditing(false)
+    const hours = Math.max(0, Number(value) || 0)
+    if (hours !== capacityHours) onSetOverride(hours)
+  }
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-1.5 bg-muted rounded-xl px-2.5 py-1.5">
+        <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+        <input
+          type="number"
+          min="0"
+          step="0.5"
+          autoFocus
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onFocus={(e) => e.target.select()}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commit()
+            if (e.key === 'Escape') setEditing(false)
+          }}
+          className="w-14 text-xs bg-card border border-border rounded-md px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-ring/30"
+        />
+        <span className="text-xs text-muted-foreground">h</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-1">
       <button
-        onClick={onOpenMove}
-        title="Move to a different day"
-        className={`p-1.5 rounded-md hover:bg-muted ${task.isPinned ? 'text-primary' : 'text-muted-foreground'}`}
+        onClick={startEdit}
+        title="Click to set capacity for this day"
+        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground bg-muted hover:bg-accent rounded-xl px-2.5 py-1.5 transition-colors"
       >
-        {task.isPinned ? <Pin className="w-3.5 h-3.5" /> : <CalendarClock className="w-3.5 h-3.5" />}
+        <Clock className="w-3.5 h-3.5" />
+        {selectedDay ? `${formatMins(selectedDay.usedMinutes)} / ${capacityHours}h` : `${capacityHours}h capacity`}
       </button>
-      {isMoving && (
-        <div className="absolute right-0 top-full mt-1 z-10 bg-card border border-border rounded-xl shadow-lg p-2 flex flex-col gap-1.5">
-          <input
-            type="date"
-            autoFocus
-            defaultValue={currentDate}
-            onChange={(e) => e.target.value && onPickDate(e.target.value)}
-            className="text-sm px-2 py-1.5 border border-border rounded-lg bg-muted focus:outline-none focus:ring-2 focus:ring-ring/30"
-          />
-          {task.isPinned && (
-            <button
-              onClick={onUnpin}
-              className="text-xs text-muted-foreground hover:text-foreground text-left px-1"
-            >
-              Reset to auto-scheduled
-            </button>
-          )}
-        </div>
+      {hasOverride && (
+        <button
+          onClick={onClearOverride}
+          title="Reset this day to your default capacity"
+          className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-destructive transition-colors"
+        >
+          <RotateCcw className="w-3.5 h-3.5" />
+        </button>
       )}
     </div>
-  </div>
-)
+  )
+}
+
+// ── One task row inside the selected-day panel ──
+const TaskRow = ({ task, rawEstMinutes, currentDate, isMoving, onToggle, onOpenMove, onPickDate, onUnpin, onDragStart, onSaveDuration }) => {
+  const [editingDuration, setEditingDuration] = useState(false)
+  const [durationValue, setDurationValue] = useState(rawEstMinutes)
+
+  const startEdit = () => {
+    setDurationValue(rawEstMinutes)
+    setEditingDuration(true)
+  }
+  const commitEdit = () => {
+    setEditingDuration(false)
+    const mins = Math.max(5, Math.round(Number(durationValue) || 0))
+    if (mins !== rawEstMinutes) onSaveDuration(mins)
+  }
+
+  return (
+    <div className="flex items-center gap-2 px-3 sm:px-5 py-3.5 hover:bg-muted/60 transition-colors">
+      {/* Only this handle is draggable — not the row — so it can never
+          intercept a click on the checkbox or title next to it. */}
+      <span
+        draggable
+        onDragStart={onDragStart}
+        title="Drag to another day"
+        className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground shrink-0"
+      >
+        <GripVertical className="w-3.5 h-3.5" />
+      </span>
+      <span className="shrink-0 cursor-pointer" onClick={onToggle}>
+        {task.done ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : <Circle className="w-5 h-5 text-border" />}
+      </span>
+      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: task.planColor }} />
+      <span className="flex-1 text-sm text-foreground truncate cursor-pointer min-w-[60px]" onClick={onToggle}>
+        {task.title}
+        {task.isSplit && <span className="ml-1.5 text-[10px] text-muted-foreground align-middle">(part)</span>}
+      </span>
+      <span className="hidden sm:inline text-xs text-muted-foreground shrink-0">{task.planName}</span>
+      <PriorityDot priority={task.priority} />
+
+      {editingDuration ? (
+        <input
+          type="number"
+          min="5"
+          step="5"
+          autoFocus
+          value={durationValue}
+          onChange={(e) => setDurationValue(e.target.value)}
+          onFocus={(e) => e.target.select()}
+          onBlur={commitEdit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commitEdit()
+            if (e.key === 'Escape') setEditingDuration(false)
+          }}
+          className="w-16 text-xs text-right border border-border rounded-md px-1.5 py-1 bg-card focus:outline-none focus:ring-2 focus:ring-ring/30 shrink-0"
+        />
+      ) : (
+        <button
+          onClick={startEdit}
+          title={
+            task.isSplit
+              ? 'Edit total task duration — this task is split across days, so the schedule will re-split it'
+              : 'Edit task duration'
+          }
+          className="text-xs text-muted-foreground hover:text-primary shrink-0 underline decoration-dotted underline-offset-2"
+        >
+          {formatMins(task.minutes ?? task.estMinutes)}
+        </button>
+      )}
+
+      {/* Single, simple way to move a task: pick a new date. */}
+      <div className="relative flex items-center gap-1 shrink-0">
+        <button
+          onClick={onOpenMove}
+          title="Move to a different day"
+          className={`p-1.5 rounded-md hover:bg-muted ${task.isPinned ? 'text-primary' : 'text-muted-foreground'}`}
+        >
+          {task.isPinned ? <Pin className="w-3.5 h-3.5" /> : <CalendarClock className="w-3.5 h-3.5" />}
+        </button>
+        {isMoving && (
+          <div className="absolute right-0 top-full mt-1 z-10 bg-card border border-border rounded-xl shadow-lg p-2 flex flex-col gap-1.5">
+            <input
+              type="date"
+              autoFocus
+              defaultValue={currentDate}
+              onChange={(e) => e.target.value && onPickDate(e.target.value)}
+              className="text-sm px-2 py-1.5 border border-border rounded-lg bg-muted focus:outline-none focus:ring-2 focus:ring-ring/30"
+            />
+            {task.isPinned && (
+              <button
+                onClick={onUnpin}
+                className="text-xs text-muted-foreground hover:text-foreground text-left px-1"
+              >
+                Reset to auto-scheduled
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 // ── Week strip: 7 horizontally-laid-out day cards, each a drop target ──
 const WeekView = ({ weekDates, scheduleByDate, selectedDate, onSelectDate, onPrev, onNext, canGoPrev, dragOverDate, setDragOverDate, onDrop }) => (
   <div className="flex items-center gap-2">
-    <button onClick={onPrev} disabled={!canGoPrev} className="p-2 rounded-xl hover:bg-muted disabled:opacity-30 flex-shrink-0">
+    <button onClick={onPrev} disabled={!canGoPrev} className="p-2 rounded-xl hover:bg-muted disabled:opacity-30 shrink-0">
       <ChevronLeft className="w-4 h-4" />
     </button>
     <div className="flex-1 grid grid-cols-7 gap-1.5 sm:gap-2">
@@ -431,7 +543,7 @@ const WeekView = ({ weekDates, scheduleByDate, selectedDate, onSelectDate, onPre
         )
       })}
     </div>
-    <button onClick={onNext} className="p-2 rounded-xl hover:bg-muted flex-shrink-0">
+    <button onClick={onNext} className="p-2 rounded-xl hover:bg-muted shrink-0">
       <ChevronRight className="w-4 h-4" />
     </button>
   </div>
@@ -462,9 +574,9 @@ const MonthView = ({ monthCursor, setMonthCursor, scheduleByDate, selectedDate, 
         <button onClick={goNextMonth} className="p-2 rounded-xl hover:bg-muted"><ChevronRight className="w-4 h-4" /></button>
       </div>
 
-      <div className="grid grid-cols-7 gap-2 mb-2">
+      <div className="grid grid-cols-7 gap-1.5 sm:gap-2 mb-1">
         {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
-          <div key={i} className="text-center text-xs font-semibold text-muted-foreground uppercase py-1.5">{d}</div>
+          <div key={i} className="text-center text-[10px] font-semibold text-muted-foreground uppercase py-1">{d}</div>
         ))}
       </div>
 
@@ -475,8 +587,10 @@ const MonthView = ({ monthCursor, setMonthCursor, scheduleByDate, selectedDate, 
           const day = scheduleByDate[dateStr]
           const isToday = dateStr === todayStr()
           const isSelected = dateStr === selectedDate
-          const taskCount = day?.items.length || 0
+          const items = day?.items ?? []
           const isDragOver = dragOverDate === dateStr
+          const visibleItems = items.slice(0, 2)
+          const hiddenCount = items.length - visibleItems.length
 
           return (
             <button
@@ -485,16 +599,28 @@ const MonthView = ({ monthCursor, setMonthCursor, scheduleByDate, selectedDate, 
               onDragOver={(e) => { e.preventDefault(); setDragOverDate(dateStr) }}
               onDragLeave={() => setDragOverDate((d) => (d === dateStr ? null : d))}
               onDrop={(e) => onDrop(e, dateStr)}
-              className={`min-h-[64px] sm:min-h-[80px] rounded-xl border-2 flex flex-col items-center justify-center gap-1 transition-all ${
+              className={`min-h-[84px] sm:min-h-[104px] rounded-xl border-2 flex flex-col items-start p-1.5 gap-1 text-left overflow-hidden transition-all ${
                 isSelected ? 'border-primary bg-accent' : isDragOver ? 'border-primary/60 bg-accent/60' : isToday ? 'border-primary/40 bg-card' : 'border-transparent bg-card hover:bg-muted'
               }`}
             >
-              <span className="text-sm font-semibold text-foreground">{dayNum}</span>
-              {taskCount > 0 && (
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${day.overCapacity ? 'bg-amber-100 text-amber-700' : 'bg-muted text-muted-foreground'}`}>
-                  {taskCount}
-                </span>
-              )}
+              <span className={`text-xs font-semibold shrink-0 ${isToday ? 'text-primary' : 'text-foreground'}`}>
+                {dayNum}
+              </span>
+
+              <div className="w-full flex flex-col gap-0.5 overflow-hidden">
+                {visibleItems.map((item) => (
+                  <div key={item.key || item.id} className="flex items-center gap-1 w-full">
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: item.planColor }} />
+                    <span className="text-[9px] leading-tight truncate text-foreground/80">{item.title}</span>
+                  </div>
+                ))}
+                {hiddenCount > 0 && (
+                  <span className="text-[9px] text-muted-foreground pl-2.5">+{hiddenCount} more</span>
+                )}
+                {items.length > 0 && day.overCapacity && (
+                  <span className="text-[8px] text-amber-600 font-semibold pl-2.5">Over capacity</span>
+                )}
+              </div>
             </button>
           )
         })}
@@ -503,8 +629,6 @@ const MonthView = ({ monthCursor, setMonthCursor, scheduleByDate, selectedDate, 
   )
 }
 
-// ── Loading skeleton so the "no plans" empty state doesn't flash on
-// first load while the Firestore subscriptions are still connecting ──
 const PlannerSkeleton = () => (
   <div className="animate-pulse">
     <div className="grid grid-cols-7 gap-2 mb-6">

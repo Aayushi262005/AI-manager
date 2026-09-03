@@ -1,8 +1,9 @@
+import { planProgressPct } from './progress'
+
 export const computeStatus = (plan, tasks) => {
   if (tasks.length === 0) return { label: 'Not started', tone: 'gray' }
 
-  const doneCount = tasks.filter((t) => t.done).length
-  const progressPct = (doneCount / tasks.length) * 100
+  const progressPct = planProgressPct(tasks)
   if (progressPct >= 100) return { label: 'Completed', tone: 'emerald' }
 
   const today = new Date()
@@ -22,5 +23,6 @@ export const computeStatus = (plan, tasks) => {
 export const TONE_CLASSES = {
   emerald: 'bg-emerald-50 text-emerald-600',
   amber: 'bg-amber-50 text-amber-600',
+  rose: 'bg-rose-50 text-rose-600',
   gray: 'bg-muted text-muted-foreground',
 }

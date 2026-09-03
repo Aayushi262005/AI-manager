@@ -1,10 +1,12 @@
 import React, { useState } from 'react'
 import { X } from 'lucide-react'
+import ColorSwatchPicker, { PLAN_COLORS } from './ColorSwatchPicker'
 
 const EditPlanModal = ({ plan, onClose, onSave }) => {
   const [name, setName] = useState(plan.name)
   const [deadline, setDeadline] = useState(plan.deadline)
   const [description, setDescription] = useState(plan.description || '')
+  const [color, setColor] = useState(plan.color || PLAN_COLORS[0])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -21,7 +23,7 @@ const EditPlanModal = ({ plan, onClose, onSave }) => {
     setError('')
     setSaving(true)
     try {
-      await onSave({ name: name.trim(), deadline, description: description.trim() })
+      await onSave({ name: name.trim(), deadline, description: description.trim(), color })
       onClose()
     } catch (err) {
       setError('Something went wrong — try again.')
@@ -82,6 +84,11 @@ const EditPlanModal = ({ plan, onClose, onSave }) => {
             />
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">Color</label>
+            <ColorSwatchPicker value={color} onChange={setColor} />
+          </div>
+
           <button
             type="submit"
             disabled={saving}
@@ -96,4 +103,3 @@ const EditPlanModal = ({ plan, onClose, onSave }) => {
 }
 
 export default EditPlanModal
-

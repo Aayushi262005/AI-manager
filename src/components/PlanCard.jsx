@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { subscribeToTasks } from '../services/planService'
 import { formatMins, daysLeftInfo } from '../utils/format'
 import { computeStatus, TONE_CLASSES } from '../utils/planStatus'
+import { planProgressPct, remainingMinutesForTask } from '../utils/progress'
 
 const PlanCard = ({ plan, onOpen, onDelete }) => {
   const { user } = useAuth()
@@ -16,8 +17,8 @@ const PlanCard = ({ plan, onOpen, onDelete }) => {
   }, [user, plan.id])
 
   const doneCount = tasks.filter((t) => t.done).length
-  const progressPct = tasks.length ? Math.round((doneCount / tasks.length) * 100) : 0
-  const remainingMins = tasks.filter((t) => !t.done).reduce((sum, t) => sum + (t.estMinutes || 0), 0)
+  const progressPct = planProgressPct(tasks)
+  const remainingMins = tasks.filter((t) => !t.done).reduce((sum, t) => sum + remainingMinutesForTask(t), 0)
   const { days, label: daysLabel, urgent } = daysLeftInfo(plan.deadline)
   const status = computeStatus(plan, tasks)
 
@@ -62,7 +63,6 @@ const PlanCard = ({ plan, onOpen, onDelete }) => {
         </div>
       </div>
 
-      {/* Status + progress bar */}
       <div className="flex items-center justify-between mb-1.5">
         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${TONE_CLASSES[status.tone]}`}>
           {status.label}
@@ -76,7 +76,6 @@ const PlanCard = ({ plan, onOpen, onDelete }) => {
         />
       </div>
 
-      {/* 3-stat grid */}
       <div className="grid grid-cols-3 gap-2 text-center">
         <div className="bg-muted rounded-xl py-2">
           <div className="text-xs font-bold text-foreground">{doneCount}/{tasks.length}</div>

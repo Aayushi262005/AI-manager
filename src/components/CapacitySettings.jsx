@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
-import { Clock, Check } from 'lucide-react'
+import { Clock, Check, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { subscribeToCapacitySettings, setDefaultCapacity, setDayOverride, getDayOverride } from '../services/capacityService'
+import { subscribeToCapacitySettings, subscribeToOverrides, setDefaultCapacity, setDayOverride, clearDayOverride } from '../services/capacityService'
 import { toDateStr } from '../utils/scheduler'
 
 const todayStr = () => toDateStr(new Date())
@@ -11,8 +11,8 @@ const CapacitySettings = () => {
   const [defaultHours, setDefaultHours] = useState(4)
   const [savedHours, setSavedHours] = useState(4)
   const [saving, setSaving] = useState(false)
-
-  const [todayOverride, setTodayOverride] = useState('')
+  const [overrides, setOverrides] = useState({})
+  const [todayInput, setTodayInput] = useState('')
   const [savingToday, setSavingToday] = useState(false)
 
   useEffect(() => {
@@ -26,10 +26,11 @@ const CapacitySettings = () => {
 
   useEffect(() => {
     if (!user) return
-    getDayOverride(user.uid, todayStr()).then((hours) => {
-      if (hours !== null) setTodayOverride(String(hours))
-    })
+    const unsubscribe = subscribeToOverrides(user.uid, setOverrides)
+    return () => unsubscribe()
   }, [user])
+
+  const todayOverrideValue = overrides[todayStr()] // number if set, undefined otherwise
 
   const handleSaveDefault = async () => {
     setSaving(true)
@@ -41,10 +42,20 @@ const CapacitySettings = () => {
   }
 
   const handleSaveToday = async () => {
-    if (todayOverride === '') return
+    if (todayInput === '') return
     setSavingToday(true)
     try {
-      await setDayOverride(user.uid, todayStr(), Number(todayOverride))
+      await setDayOverride(user.uid, todayStr(), Number(todayInput))
+      setTodayInput('')
+    } finally {
+      setSavingToday(false)
+    }
+  }
+
+  const handleClearToday = async () => {
+    setSavingToday(true)
+    try {
+      await clearDayOverride(user.uid, todayStr())
     } finally {
       setSavingToday(false)
     }
@@ -70,7 +81,7 @@ const CapacitySettings = () => {
           <div className="text-sm font-medium text-foreground">Default daily capacity</div>
           <div className="text-sm text-muted-foreground mt-0.5">Used for every day, unless you override a specific one below.</div>
         </div>
-        <div className="flex items-center gap-3 flex-shrink-0">
+        <div className="flex items-center gap-3 shrink-0">
           <div className="relative">
             <input
               type="number"
@@ -96,29 +107,45 @@ const CapacitySettings = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-8 py-6">
         <div className="max-w-sm">
           <div className="text-sm font-medium text-foreground">Just for today</div>
-          <div className="text-sm text-muted-foreground mt-0.5">Unusually busy or unusually free? Override only today's number.</div>
+          <div className="text-sm text-muted-foreground mt-0.5">
+            {typeof todayOverrideValue === 'number' ? (
+              <>Overridden to <span className="font-semibold text-foreground">{todayOverrideValue}h</span> for today.</>
+            ) : (
+              <>Using your default of {defaultHours}h today. Unusually busy or free? Override it below.</>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-3 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <div className="relative">
             <input
               type="number"
               min="0"
               max="16"
               step="0.5"
-              placeholder={String(defaultHours)}
-              value={todayOverride}
-              onChange={(e) => setTodayOverride(e.target.value)}
-              className="w-28 px-4 py-2.5 text-base font-medium bg-muted border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring text-center"
+              placeholder="e.g. 2"
+              value={todayInput}
+              onChange={(e) => setTodayInput(e.target.value)}
+              className="w-24 px-4 py-2.5 text-base font-medium bg-muted border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring text-center"
             />
-            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">hrs</span>
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">hrs</span>
           </div>
           <button
             onClick={handleSaveToday}
-            disabled={savingToday || todayOverride === ''}
+            disabled={savingToday || todayInput === ''}
             className="px-5 py-2.5 bg-accent text-primary text-sm font-semibold rounded-xl hover:bg-accent/70 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
           >
             {savingToday ? 'Saving…' : 'Set for today'}
           </button>
+          {typeof todayOverrideValue === 'number' && (
+            <button
+              onClick={handleClearToday}
+              disabled={savingToday}
+              title="Remove today's override — go back to using the default"
+              className="p-2.5 rounded-xl hover:bg-muted text-muted-foreground hover:text-destructive transition-colors disabled:opacity-40"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
     </div>
