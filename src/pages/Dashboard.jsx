@@ -30,6 +30,8 @@ const Dashboard = () => {
   const navigate = useNavigate()
   const [activeSection, setActiveSection] = useState('overview')
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [newPlanSignal, setNewPlanSignal] = useState(0)
+  const [newNoteSignal, setNewNoteSignal] = useState(0)
   const [focusSession, setFocusSession] = useState(null)
   const [completedSession, setCompletedSession] = useState(null)
   const [focusError, setFocusError] = useState('')
@@ -97,6 +99,17 @@ const Dashboard = () => {
 
   const handleDiscardSession = () => setCompletedSession(null)
 
+  // Global New menu actions
+  const handleNewPlan = () => {
+    setActiveSection('plans')
+    setNewPlanSignal((value) => value + 1)
+  }
+
+  const handleNewNote = () => {
+    setActiveSection('knowledge')
+    setNewNoteSignal((value) => value + 1)
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar
@@ -112,16 +125,28 @@ const Dashboard = () => {
         <Header
           activeSection={activeSection}
           onNavigate={setActiveSection}
-          onNewClick={() => alert('We will wire this up when we build Plans/Tasks!')}
+          onNewPlan={handleNewPlan}
+          onNewNote={handleNewNote}
           onMenuClick={() => setSidebarOpen(true)}
         />
 
         <div className="flex-1 flex min-h-0">
           {activeSection === 'overview' && <OverviewSection onNavigate={setActiveSection} onStartFocus={handleStartFocus} />}
-          {activeSection === 'plans' && <PlansSection onStartFocus={handleStartFocus} />}
+
+          {activeSection === 'plans' && (
+            <PlansSection
+              onStartFocus={handleStartFocus}
+              newPlanSignal={newPlanSignal}
+            />
+          )}
+
           {activeSection === 'planner' && <PlannerSection />}
           {activeSection === 'insights' && <InsightsSection onNavigate={setActiveSection} />}
-          {activeSection === 'knowledge' && <KnowledgeSection />}
+
+          {activeSection === 'knowledge' && (
+            <KnowledgeSection newNoteSignal={newNoteSignal} />
+          )}
+
           {activeSection === 'copilot' && <PlaceholderSection title="AI Copilot" />}
           {activeSection === 'settings' && (
             <div className="flex-1 p-6 sm:p-8">
@@ -137,20 +162,17 @@ const Dashboard = () => {
         </div>
       </main>
 
-      {focusError && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-rose-50 border border-rose-200 rounded-xl px-4 py-2.5 text-xs text-rose-700 shadow-lg">
-          {focusError}
-        </div>
-      )}
-
       {focusSession && (
-        <FocusBar task={focusSession.task} elapsedSeconds={focusSession.elapsed} onEnd={handleEndFocus} />
+        <FocusBar
+          task={focusSession.task}
+          elapsed={focusSession.elapsed}
+          onEnd={handleEndFocus}
+        />
       )}
 
       {completedSession && (
         <FocusCompleteModal
-          task={completedSession.task}
-          durationMinutes={completedSession.durationMinutes}
+          session={completedSession}
           onSave={handleSaveProgress}
           onDiscard={handleDiscardSession}
         />

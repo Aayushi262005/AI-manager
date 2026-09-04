@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, Percent, Clock, Timer, HeartPulse } from 'lucide-react'
+import { CheckCircle2, Percent, Clock, Timer, HeartPulse, Flame } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { subscribeToPlans, subscribeToTasks } from '../services/planService'
 import { subscribeToAllFocusSessions } from '../services/focusService'
@@ -112,6 +112,57 @@ const InsightsSection = ({ onNavigate }) => {
   const weeklyData = last7Days.map((d) => ({ ...d, minutes: minutesByDay[d.dateStr] || 0 }))
   const maxMinutes = Math.max(...weeklyData.map((d) => d.minutes), 1)
 
+  // ── Consistency streak: every distinct calendar day with at least one
+  // focus session, walked backward from today to find the current run,
+  // and scanned across all history for the longest run ever. ──
+  const activeDayStrs = useMemo(() => {
+    const set = new Set()
+    focusSessions.forEach((s) => {
+      const d = toJsDate(s.endedAt || s.startedAt)
+      if (d) set.add(toDateStr(d))
+    })
+    return set
+  }, [focusSessions])
+
+  const { currentStreak, bestStreak } = useMemo(() => {
+    if (activeDayStrs.size === 0) return { currentStreak: 0, bestStreak: 0 }
+
+    // Don't zero out the streak just because today hasn't happened yet —
+    // start from yesterday if today has no session so far.
+    let current = 0
+    const cursor = new Date()
+    if (!activeDayStrs.has(toDateStr(cursor))) cursor.setDate(cursor.getDate() - 1)
+    while (activeDayStrs.has(toDateStr(cursor))) {
+      current += 1
+      cursor.setDate(cursor.getDate() - 1)
+    }
+
+    const sortedDays = Array.from(activeDayStrs).sort()
+    let best = 1
+    let run = 1
+    for (let i = 1; i < sortedDays.length; i++) {
+      const diffDays = Math.round((new Date(sortedDays[i]) - new Date(sortedDays[i - 1])) / 86400000)
+      run = diffDays === 1 ? run + 1 : 1
+      best = Math.max(best, run)
+    }
+    return { currentStreak: current, bestStreak: Math.max(best, current) }
+  }, [activeDayStrs])
+
+  // ── Last 14 days, for the activity strip ──
+  const last14Days = useMemo(() => {
+    const days = []
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date()
+      d.setDate(d.getDate() - i)
+      days.push({
+        dateStr: toDateStr(d),
+        label: d.toLocaleDateString('en-US', { weekday: 'narrow' }),
+        isToday: i === 0,
+      })
+    }
+    return days.map((d) => ({ ...d, minutes: minutesByDay[d.dateStr] || 0 }))
+  }, [minutesByDay])
+
   // ── Plan health: reuses the exact same computeStatus used for At Risk
   // detection everywhere else — Insights can't disagree with Overview ──
   const healthBreakdown = useMemo(() => {
@@ -144,7 +195,7 @@ const InsightsSection = ({ onNavigate }) => {
         <EmptyInsights onNavigate={onNavigate} />
       ) : (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
             <StatCard
               icon={CheckCircle2}
               label="Tasks completed"
@@ -169,6 +220,37 @@ const InsightsSection = ({ onNavigate }) => {
               value={sessionCount}
               sub="completed"
             />
+            <StatCard
+              icon={Flame}
+              label="Study streak"
+              value={`${currentStreak} ${currentStreak === 1 ? 'day' : 'days'}`}
+              sub={bestStreak > currentStreak ? `best ${bestStreak}` : currentStreak > 0 ? 'personal best!' : 'start today'}
+            />
+          </div>
+
+          {/* 14-day activity strip */}
+          <div className="bg-card border border-border rounded-2xl shadow-sm p-5 mb-5">
+            <div className="flex items-center gap-2 mb-4">
+              <Flame className="w-4 h-4 text-primary" />
+              <h3 className="text-sm font-semibold text-foreground">Last 14 days</h3>
+            </div>
+            <div className="flex items-end justify-between gap-1.5 sm:gap-2">
+              {last14Days.map((d) => {
+                const intensity =
+                  d.minutes === 0 ? 'bg-muted' :
+                  d.minutes <= 30 ? 'bg-primary/30' :
+                  d.minutes <= 60 ? 'bg-primary/60' : 'bg-primary'
+                return (
+                  <div key={d.dateStr} className="flex-1 flex flex-col items-center gap-1.5">
+                    <div
+                      className={`w-full aspect-square rounded-md ${intensity} ${d.isToday ? 'ring-2 ring-primary/50 ring-offset-1 ring-offset-card' : ''}`}
+                      title={`${d.dateStr}: ${formatMins(d.minutes)}`}
+                    />
+                    <span className="text-[9px] text-muted-foreground">{d.label}</span>
+                  </div>
+                )
+              })}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -227,11 +309,12 @@ const InsightsSection = ({ onNavigate }) => {
 
 const InsightsSkeleton = () => (
   <div className="animate-pulse space-y-5">
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-      {Array.from({ length: 4 }).map((_, i) => (
+    <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      {Array.from({ length: 5 }).map((_, i) => (
         <div key={i} className="h-24 rounded-2xl bg-muted" />
       ))}
     </div>
+    <div className="h-24 rounded-2xl bg-muted" />
     <div className="h-56 rounded-2xl bg-muted" />
   </div>
 )

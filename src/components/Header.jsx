@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Bell, Brain, Plus, Menu, ChevronDown, Target, ListTodo, FileText } from 'lucide-react'
+import { Bell, Brain, Plus, Menu, ChevronDown, Target, FileText } from 'lucide-react'
 
 const SECTION_LABELS={
     overview: 'Overview',
@@ -11,7 +11,7 @@ const SECTION_LABELS={
     settings: 'Settings',
 }
 
-const Header = ({ activeSection, onNavigate, onNewPlan, onNewTask, onNewNote, onMenuClick }) => {
+const Header = ({ activeSection, onNavigate, onNewPlan, onNewNote, onMenuClick }) => {
   const [newMenuOpen, setNewMenuOpen] = useState(false)
 
   const handleSelect = (action) => {
@@ -62,13 +62,6 @@ const Header = ({ activeSection, onNavigate, onNewPlan, onNewTask, onNewNote, on
                       className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-foreground hover:bg-muted transition-colors text-left"
                     >
                       <Target className="w-4 h-4 text-primary" /> New plan
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSelect(onNewTask)}
-                      className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-foreground hover:bg-muted transition-colors text-left border-t border-border"
-                    >
-                      <ListTodo className="w-4 h-4 text-emerald-600" /> New task
                     </button>
                     <button
                       type="button"

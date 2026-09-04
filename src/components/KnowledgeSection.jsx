@@ -13,7 +13,7 @@ import { friendlyFirestoreError } from '../utils/errors'
 
 const TYPE_ICON = { note: FileText, link: Link2 }
 
-const KnowledgeSection = () => {
+const KnowledgeSection = ({ newNoteSignal }) => {
   const { user } = useAuth()
   const [plans, setPlans] = useState([])
   const [resources, setResources] = useState([])
@@ -149,6 +149,12 @@ const KnowledgeSection = () => {
     }
   }
 
+   useEffect(() => {
+    if (!newNoteSignal || loading) return
+
+    handleCreateNote()
+  }, [newNoteSignal, loading])
+  
   const handleOpenLinkPopover = () => {
     setAddMenuOpen(false)
     if (plans.length === 0) {
@@ -332,3 +338,4 @@ const KnowledgeSection = () => {
 }
 
 export default KnowledgeSection
+
