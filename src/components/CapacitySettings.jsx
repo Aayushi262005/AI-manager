@@ -64,7 +64,7 @@ const CapacitySettings = () => {
   const hasUnsavedChanges = Number(defaultHours) !== savedHours
 
   return (
-    <div className="relative bg-card border border-border rounded-2xl shadow-sm overflow-hidden m-5">
+    <div className="relative bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
       <div className="absolute top-0 left-10 right-10 h-[2px] rounded-b-full bg-gradient-to-r from-primary/50 to-chart-2/50" />
 
       <div className="px-8 py-6 border-b border-border">

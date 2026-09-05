@@ -1,21 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, Percent, Clock, Timer, HeartPulse, Flame } from 'lucide-react'
+import React, { useMemo, useState } from 'react'
+import { CheckCircle2, Percent, Clock, Timer, HeartPulse, Flame, ShieldCheck, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { subscribeToPlans, subscribeToTasks } from '../services/planService'
-import { subscribeToAllFocusSessions } from '../services/focusService'
+import { useFocusStats } from '../hooks/useFocusStats'
 import { computeStatus, TONE_CLASSES } from '../utils/planStatus'
 import { toDateStr } from '../utils/scheduler'
 import { formatMins } from '../utils/format'
-
-// Firestore returns Timestamp instances (with .toDate()) for fields we
-// wrote as JS Dates — same conversion pattern already used in
-// planStatus.js for plan.createdAt.
-const toJsDate = (value) => {
-  if (!value) return null
-  if (typeof value.toDate === 'function') return value.toDate()
-  if (value instanceof Date) return value
-  return new Date(value)
-}
 
 const HEALTH_LABEL_ORDER = ['On Track', 'At Risk', 'Overdue', 'Completed', 'Not started']
 
@@ -37,31 +27,18 @@ const InsightsSection = ({ onNavigate }) => {
   const [plansLoaded, setPlansLoaded] = useState(false)
   const [tasksByPlan, setTasksByPlan] = useState({})
   const [loadedPlanIds, setLoadedPlanIds] = useState(new Set())
-  const [focusSessions, setFocusSessions] = useState([])
-  const [sessionsLoaded, setSessionsLoaded] = useState(false)
-  const [sessionsError, setSessionsError] = useState('')
+  const [calendarMonthOffset, setCalendarMonthOffset] = useState(0)
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (!user) return
-    const unsub1 = subscribeToPlans(
+    const unsub = subscribeToPlans(
       user.uid,
       (p) => { setPlans(p); setPlansLoaded(true) },
     )
-    const unsub2 = subscribeToAllFocusSessions(
-      user.uid,
-      (sessions) => { setFocusSessions(sessions); setSessionsLoaded(true) },
-      (error) => {
-        // Never let a failed listener leave the page stuck on the skeleton —
-        // show it as "no data" and surface the real error for debugging.
-        setSessionsError(error?.message || 'Could not load focus session data.')
-        setFocusSessions([])
-        setSessionsLoaded(true)
-      }
-    )
-    return () => { unsub1(); unsub2() }
+    return () => unsub()
   }, [user])
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (!user || plans.length === 0) return
     const unsubs = plans.map((plan) =>
       subscribeToTasks(user.uid, plan.id, (tasks) => {
@@ -77,15 +54,18 @@ const InsightsSection = ({ onNavigate }) => {
     () => Object.entries(tasksByPlan).filter(([planId]) => planIds.has(planId)).flatMap(([, tasks]) => tasks),
     [tasksByPlan, planIds]
   )
+
+  const {
+    sessionsLoaded, sessionsError, totalFocusMinutes, sessionCount, avgSessionMinutes,
+    minutesByDay, currentStreak, bestStreak,
+  } = useFocusStats(user, allTasks)
+
   const loading = !plansLoaded || !sessionsLoaded || (plans.length > 0 && !plans.every((p) => loadedPlanIds.has(p.id)))
 
   // ── Core stats ──
   const totalTasks = allTasks.length
   const doneCount = allTasks.filter((t) => t.done).length
   const completionRate = totalTasks ? Math.round((doneCount / totalTasks) * 100) : 0
-  const totalFocusMinutes = focusSessions.reduce((sum, s) => sum + (s.durationMinutes || 0), 0)
-  const sessionCount = focusSessions.length
-  const avgSessionMinutes = sessionCount ? Math.round(totalFocusMinutes / sessionCount) : 0
 
   // ── Weekly progress: focus minutes per day, last 7 days including today ──
   const last7Days = useMemo(() => {
@@ -98,70 +78,39 @@ const InsightsSection = ({ onNavigate }) => {
     return days
   }, [])
 
-  const minutesByDay = useMemo(() => {
-    const map = {}
-    focusSessions.forEach((s) => {
-      const d = toJsDate(s.endedAt || s.startedAt)
-      if (!d) return
-      const key = toDateStr(d)
-      map[key] = (map[key] || 0) + (s.durationMinutes || 0)
-    })
-    return map
-  }, [focusSessions])
-
   const weeklyData = last7Days.map((d) => ({ ...d, minutes: minutesByDay[d.dateStr] || 0 }))
   const maxMinutes = Math.max(...weeklyData.map((d) => d.minutes), 1)
 
-  // ── Consistency streak: every distinct calendar day with at least one
-  // focus session, walked backward from today to find the current run,
-  // and scanned across all history for the longest run ever. ──
-  const activeDayStrs = useMemo(() => {
-    const set = new Set()
-    focusSessions.forEach((s) => {
-      const d = toJsDate(s.endedAt || s.startedAt)
-      if (d) set.add(toDateStr(d))
-    })
-    return set
-  }, [focusSessions])
+  // ── Monthly streak strip: every day of the viewed month, colored by
+  // whether a focus session happened that day. calendarMonthOffset is 0
+  // for the current month, -1 for last month, etc. — you can browse back,
+  // but never past the current month. ──
+  const calendarMonth = useMemo(() => {
+    const today = new Date()
+    const base = new Date(today.getFullYear(), today.getMonth() + calendarMonthOffset, 1)
+    const year = base.getFullYear()
+    const month = base.getMonth()
+    const daysInMonth = new Date(year, month + 1, 0).getDate()
+    const todayStr = toDateStr(today)
 
-  const { currentStreak, bestStreak } = useMemo(() => {
-    if (activeDayStrs.size === 0) return { currentStreak: 0, bestStreak: 0 }
-
-    // Don't zero out the streak just because today hasn't happened yet —
-    // start from yesterday if today has no session so far.
-    let current = 0
-    const cursor = new Date()
-    if (!activeDayStrs.has(toDateStr(cursor))) cursor.setDate(cursor.getDate() - 1)
-    while (activeDayStrs.has(toDateStr(cursor))) {
-      current += 1
-      cursor.setDate(cursor.getDate() - 1)
-    }
-
-    const sortedDays = Array.from(activeDayStrs).sort()
-    let best = 1
-    let run = 1
-    for (let i = 1; i < sortedDays.length; i++) {
-      const diffDays = Math.round((new Date(sortedDays[i]) - new Date(sortedDays[i - 1])) / 86400000)
-      run = diffDays === 1 ? run + 1 : 1
-      best = Math.max(best, run)
-    }
-    return { currentStreak: current, bestStreak: Math.max(best, current) }
-  }, [activeDayStrs])
-
-  // ── Last 14 days, for the activity strip ──
-  const last14Days = useMemo(() => {
     const days = []
-    for (let i = 13; i >= 0; i--) {
-      const d = new Date()
-      d.setDate(d.getDate() - i)
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = toDateStr(new Date(year, month, day))
       days.push({
-        dateStr: toDateStr(d),
-        label: d.toLocaleDateString('en-US', { weekday: 'narrow' }),
-        isToday: i === 0,
+        day,
+        dateStr,
+        minutes: minutesByDay[dateStr] || 0,
+        isToday: dateStr === todayStr,
+        isFuture: dateStr > todayStr,
       })
     }
-    return days.map((d) => ({ ...d, minutes: minutesByDay[d.dateStr] || 0 }))
-  }, [minutesByDay])
+
+    return {
+      label: base.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+      days,
+      activeCount: days.filter((d) => !d.isFuture && d.minutes > 0).length,
+    }
+  }, [calendarMonthOffset, minutesByDay])
 
   // ── Plan health: reuses the exact same computeStatus used for At Risk
   // detection everywhere else — Insights can't disagree with Overview ──
@@ -175,6 +124,17 @@ const InsightsSection = ({ onNavigate }) => {
     })
     return HEALTH_LABEL_ORDER.map((label) => byLabel[label]).filter(Boolean)
   }, [plans, allTasks])
+
+  // ── Deadline confidence: share of plans that are On Track or already
+  // Completed, out of everything that isn't "Not started" yet. Plans with
+  // no tasks yet don't count against you — there's nothing to be at risk
+  // of failing until you've actually started scheduling work. ──
+  const confidenceEligible = healthBreakdown.filter((h) => h.label !== 'Not started')
+  const confidenceEligibleCount = confidenceEligible.reduce((sum, h) => sum + h.count, 0)
+  const onTrackCount = healthBreakdown
+    .filter((h) => h.label === 'On Track' || h.label === 'Completed')
+    .reduce((sum, h) => sum + h.count, 0)
+  const deadlineConfidence = confidenceEligibleCount ? Math.round((onTrackCount / confidenceEligibleCount) * 100) : null
 
   return (
     <div className="flex-1 p-6 sm:p-8 overflow-y-auto">
@@ -195,7 +155,7 @@ const InsightsSection = ({ onNavigate }) => {
         <EmptyInsights onNavigate={onNavigate} />
       ) : (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+          <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-5">
             <StatCard
               icon={CheckCircle2}
               label="Tasks completed"
@@ -226,36 +186,17 @@ const InsightsSection = ({ onNavigate }) => {
               value={`${currentStreak} ${currentStreak === 1 ? 'day' : 'days'}`}
               sub={bestStreak > currentStreak ? `best ${bestStreak}` : currentStreak > 0 ? 'personal best!' : 'start today'}
             />
+            <StatCard
+              icon={ShieldCheck}
+              label="Deadline confidence"
+              value={deadlineConfidence === null ? '—' : `${deadlineConfidence}%`}
+              sub={deadlineConfidence === null ? 'no active plans yet' : 'plans on track or done'}
+            />
           </div>
 
-          {/* 14-day activity strip */}
-          <div className="bg-card border border-border rounded-2xl shadow-sm p-5 mb-5">
-            <div className="flex items-center gap-2 mb-4">
-              <Flame className="w-4 h-4 text-primary" />
-              <h3 className="text-sm font-semibold text-foreground">Last 14 days</h3>
-            </div>
-            <div className="flex items-end justify-between gap-1.5 sm:gap-2">
-              {last14Days.map((d) => {
-                const intensity =
-                  d.minutes === 0 ? 'bg-muted' :
-                  d.minutes <= 30 ? 'bg-primary/30' :
-                  d.minutes <= 60 ? 'bg-primary/60' : 'bg-primary'
-                return (
-                  <div key={d.dateStr} className="flex-1 flex flex-col items-center gap-1.5">
-                    <div
-                      className={`w-full aspect-square rounded-md ${intensity} ${d.isToday ? 'ring-2 ring-primary/50 ring-offset-1 ring-offset-card' : ''}`}
-                      title={`${d.dateStr}: ${formatMins(d.minutes)}`}
-                    />
-                    <span className="text-[9px] text-muted-foreground">{d.label}</span>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
             {/* Weekly progress */}
-            <div className="lg:col-span-2 bg-card border border-border rounded-2xl shadow-sm p-5">
+            <div className="lg:col-span-3 bg-card border border-border rounded-2xl shadow-sm p-5">
               <h3 className="text-sm font-semibold text-foreground mb-4">Weekly focus time</h3>
               {sessionCount === 0 ? (
                 <div className="py-10 text-center text-sm text-muted-foreground">
@@ -279,26 +220,71 @@ const InsightsSection = ({ onNavigate }) => {
               )}
             </div>
 
-            {/* Plan health */}
-            <div className="bg-card border border-border rounded-2xl shadow-sm p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <HeartPulse className="w-4 h-4 text-primary" />
-                <h3 className="text-sm font-semibold text-foreground">Plan health</h3>
+            <div className="lg:col-span-2 flex flex-col gap-4">
+              {/* Plan health */}
+              <div className="bg-card border border-border rounded-2xl shadow-sm p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <HeartPulse className="w-4 h-4 text-primary" />
+                  <h3 className="text-sm font-semibold text-foreground">Plan health</h3>
+                </div>
+                {healthBreakdown.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">No plans yet.</div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {healthBreakdown.map((h) => (
+                      <div key={h.label} className="flex items-center justify-between">
+                        <span className={`text-xs font-semibold px-3 py-1 rounded-full ${TONE_CLASSES[h.tone]}`}>
+                          {h.label}
+                        </span>
+                        <span className="text-sm font-semibold text-foreground">{h.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              {healthBreakdown.length === 0 ? (
-                <div className="text-xs text-muted-foreground">No plans yet.</div>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {healthBreakdown.map((h) => (
-                    <div key={h.label} className="flex items-center justify-between">
-                      <span className={`text-xs font-semibold px-3 py-1 rounded-full ${TONE_CLASSES[h.tone]}`}>
-                        {h.label}
-                      </span>
-                      <span className="text-sm font-semibold text-foreground">{h.count}</span>
-                    </div>
+
+              {/* Consistency streak — monthly view, sized to match the card above */}
+              <div className="bg-card border border-border rounded-2xl shadow-sm p-5">
+                <div className="flex items-center justify-between mb-1">
+                  <h4 className="text-sm font-semibold text-foreground">Consistency streak</h4>
+                  <div className="flex items-center gap-0.5">
+                    <button
+                      onClick={() => setCalendarMonthOffset((o) => o - 1)}
+                      className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                      title="Previous month"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setCalendarMonthOffset((o) => Math.min(0, o + 1))}
+                      disabled={calendarMonthOffset === 0}
+                      className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+                      title="Next month"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="text-3xl font-bold text-foreground mb-1">
+                  {currentStreak} <span className="text-base text-muted-foreground font-normal">{currentStreak === 1 ? 'day' : 'days'}</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-4">
+                  You showed up {currentStreak} {currentStreak === 1 ? 'day' : 'days'} in a row. Best: {bestStreak}.
+                </p>
+                <div className="flex items-center gap-1">
+                  {calendarMonth.days.map((d) => (
+                    <div
+                      key={d.dateStr}
+                      title={d.isFuture ? d.dateStr : `${d.dateStr}: ${formatMins(d.minutes)}`}
+                      className={`flex-1 h-4 rounded-sm ${
+                        d.isFuture ? 'bg-transparent border border-dashed border-border' :
+                        d.minutes > 0 ? 'bg-primary' : 'bg-muted'
+                      } ${d.isToday ? 'ring-2 ring-primary/50' : ''}`}
+                    />
                   ))}
                 </div>
-              )}
+                <p className="text-[11px] text-muted-foreground mt-2">{calendarMonth.label} · {calendarMonth.activeCount} active days</p>
+              </div>
             </div>
           </div>
         </>
@@ -309,12 +295,11 @@ const InsightsSection = ({ onNavigate }) => {
 
 const InsightsSkeleton = () => (
   <div className="animate-pulse space-y-5">
-    <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-      {Array.from({ length: 5 }).map((_, i) => (
+    <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+      {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="h-24 rounded-2xl bg-muted" />
       ))}
     </div>
-    <div className="h-24 rounded-2xl bg-muted" />
     <div className="h-56 rounded-2xl bg-muted" />
   </div>
 )

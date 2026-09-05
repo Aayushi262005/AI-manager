@@ -21,12 +21,20 @@ export const updateTaskProgress = async (uid, planId, taskId, progress) => {
   return updateDoc(taskRef, { progress: clamped, done: clamped >= 100 });
 };
 
-export const subscribeToTaskFocusSessions = (uid, planId, taskId, callback) => {
+export const subscribeToTaskFocusSessions = (uid, planId, taskId, callback, onError) => {
   const sessionsRef = collection(db, "users", uid, "plans", planId, "tasks", taskId, "focusSessions");
   const q = query(sessionsRef, orderBy("createdAt", "desc"));
-  return onSnapshot(q, (snapshot) => {
-    callback(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
-  });
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      callback(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+    },
+    (error) => {
+      console.error("subscribeToTaskFocusSessions failed:", error);
+      if (onError) onError(error);
+      else callback([]);
+    }
+  );
 };
 
 export const subscribeToAllFocusSessions = (uid, callback, onError) => {

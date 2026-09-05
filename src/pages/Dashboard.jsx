@@ -10,11 +10,12 @@ import PlannerSection from '../components/PlannerSection'
 import OverviewSection from '../components/OverviewSection'
 import InsightsSection from '../components/InsightsSection'
 import KnowledgeSection from '../components/KnowledgeSection'
-import CapacitySettings from '../components/CapacitySettings'
+import SettingsSection from '../components/SettingsSection'
 import FocusBar from '../components/FocusBar'
 import FocusCompleteModal from '../components/FocusCompleteModal'
 import { createFocusSession, updateTaskProgress } from '../services/focusService'
 import { friendlyFirestoreError } from '../utils/errors'
+import { useTheme } from '../hooks/useTheme'
 
 const PlaceholderSection = ({ title }) => (
   <div className="flex-1 flex items-center justify-center p-10">
@@ -28,6 +29,7 @@ const PlaceholderSection = ({ title }) => (
 const Dashboard = () => {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const { theme, toggleTheme } = useTheme()
   const [activeSection, setActiveSection] = useState('overview')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [newPlanSignal, setNewPlanSignal] = useState(0)
@@ -149,15 +151,7 @@ const Dashboard = () => {
 
           {activeSection === 'copilot' && <PlaceholderSection title="AI Copilot" />}
           {activeSection === 'settings' && (
-            <div className="flex-1 p-6 sm:p-8">
-              <div className="max-w-2xl space-y-5">
-                <div>
-                  <h1 className="text-xl font-bold text-foreground">Settings</h1>
-                  <p className="text-sm text-muted-foreground mt-0.5">Manage your workspace preferences</p>
-                </div>
-                <CapacitySettings />
-              </div>
-            </div>
+            <SettingsSection theme={theme} onToggleTheme={toggleTheme} />
           )}
         </div>
       </main>
@@ -165,14 +159,15 @@ const Dashboard = () => {
       {focusSession && (
         <FocusBar
           task={focusSession.task}
-          elapsed={focusSession.elapsed}
+          elapsedSeconds={focusSession.elapsed}
           onEnd={handleEndFocus}
         />
       )}
 
       {completedSession && (
         <FocusCompleteModal
-          session={completedSession}
+          task={completedSession.task}
+          durationMinutes={completedSession.durationMinutes}
           onSave={handleSaveProgress}
           onDiscard={handleDiscardSession}
         />

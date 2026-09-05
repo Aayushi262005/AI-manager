@@ -1,27 +1,30 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
-  ListChecks, Clock, AlertTriangle, CalendarClock, TrendingUp, Flag,
+  ListChecks, Clock, AlertTriangle, CalendarClock, Flame, Timer, CheckSquare,
   Plus, CalendarDays, Settings as SettingsIcon, CheckCircle2, Circle, Play,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { subscribeToPlans, subscribeToTasks, toggleTask } from '../services/planService'
 import { subscribeToCapacitySettings, subscribeToOverrides } from '../services/capacityService'
+import { useFocusStats } from '../hooks/useFocusStats'
 import { allocateSchedule, toDateStr } from '../utils/scheduler'
 import { computeStatus, TONE_CLASSES } from '../utils/planStatus'
-import { planProgressPct, remainingMinutesForTask } from '../utils/progress'
+import { remainingMinutesForTask } from '../utils/progress'
 import { formatMins, daysLeftInfo } from '../utils/format'
 import { friendlyFirestoreError } from '../utils/errors'
 import PriorityDot from './PriorityDot'
 
 const todayStr = () => toDateStr(new Date())
-const StatCard = ({ icon: Icon, label, value, sub }) => (
-  <div className="bg-card border border-border rounded-2xl p-5 shadow-sm">
-    <div className="w-9 h-9 rounded-xl bg-accent flex items-center justify-center mb-3">
+
+const QuickStat = ({ icon: Icon, label, value }) => (
+  <div className="bg-card border border-border rounded-2xl px-4 py-3.5 flex items-center gap-3 shadow-sm">
+    <div className="w-9 h-9 rounded-xl bg-accent flex items-center justify-center shrink-0">
       <Icon className="w-4 h-4 text-primary" />
     </div>
-    <div className="text-2xl font-bold text-foreground">{value}</div>
-    <div className="text-xs text-muted-foreground mt-1">{label}</div>
-    {sub && <div className="text-[11px] text-muted-foreground/70 mt-0.5">{sub}</div>}
+    <div className="min-w-0">
+      <div className="text-base font-bold text-foreground leading-none">{value}</div>
+      <div className="text-[11px] text-muted-foreground mt-1 truncate">{label}</div>
+    </div>
   </div>
 )
 
@@ -69,6 +72,8 @@ const OverviewSection = ({ onNavigate, onStartFocus }) => {
   )
   const loading = !plansLoaded || (plans.length > 0 && !plans.every((p) => loadedPlanIds.has(p.id)))
 
+  const { currentStreak, sessionsThisWeek } = useFocusStats(user, allTasks)
+
   const { schedule } = useMemo(() => {
     const plansWithTasks = plans.map((plan) => ({
       ...plan,
@@ -80,11 +85,15 @@ const OverviewSection = ({ onNavigate, onStartFocus }) => {
   const today = todayStr()
   const todaysDay = schedule.find((d) => d.date === today)
   const todaysItems = todaysDay?.items ?? []
-  const todaysUsedMinutes = todaysDay?.usedMinutes ?? 0
-  const todaysCapacityHours = overrides[today] ?? defaultHours
 
   const incompleteTasks = allTasks.filter((t) => !t.done)
   const remainingMinutes = incompleteTasks.reduce((sum, t) => sum + remainingMinutesForTask(t), 0)
+
+  const todaysTasks = useMemo(() => todaysItems.map((t) => ({ ...t, done: !!t.done })), [todaysItems])
+  const topTask = todaysTasks.find((t) => !t.done)
+  const todaysCompletionRate = todaysTasks.length
+    ? Math.round((todaysTasks.filter((t) => t.done).length / todaysTasks.length) * 100)
+    : 0
 
   const highPriorityTasks = useMemo(() => (
     incompleteTasks
@@ -114,10 +123,6 @@ const OverviewSection = ({ onNavigate, onStartFocus }) => {
       .sort((a, b) => a.deadline.localeCompare(b.deadline))
       .slice(0, 5)
   ), [plansWithStatus])
-
-  const totalTasks = allTasks.length
-  const totalDone = allTasks.filter((t) => t.done).length
-  const overallProgressPct = planProgressPct(allTasks)
 
   // Shared by every checkbox on this page — a failed write shows a real
   // reason instead of silently doing nothing.
@@ -150,50 +155,68 @@ const OverviewSection = ({ onNavigate, onStartFocus }) => {
         <EmptyOverview onNavigate={onNavigate} />
       ) : (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <StatCard
-              icon={Clock}
-              label="Today's workload"
-              value={formatMins(todaysUsedMinutes)}
-              sub={`of ${todaysCapacityHours}h capacity`}
-            />
-            <StatCard
-              icon={ListChecks}
-              label="Remaining work"
-              value={formatMins(remainingMinutes)}
-              sub={`${incompleteTasks.length} open task${incompleteTasks.length === 1 ? '' : 's'}`}
-            />
-            <StatCard
-              icon={TrendingUp}
-              label="Overall progress"
-              value={`${overallProgressPct}%`}
-              sub={`${totalDone}/${totalTasks} tasks done`}
-            />
-            <StatCard
-              icon={Flag}
-              label="High priority"
-              value={highPriorityTasks.length}
-              sub="tasks needing attention"
-            />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5">
+            {/* Today's Focus */}
+            <div className="lg:col-span-2 bg-card border border-border rounded-2xl shadow-sm p-6">
+              <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Today's Focus</div>
+              {topTask ? (
+                <>
+                  <h2 className="text-xl font-bold text-foreground mb-1 leading-tight">{topTask.title}</h2>
+                  <div className="flex items-center gap-2 mb-5 flex-wrap">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: topTask.planColor }} />
+                    <span className="text-sm text-muted-foreground">{topTask.planName}</span>
+                    <span className="text-border mx-1">·</span>
+                    <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">{formatMins(topTask.minutes ?? topTask.estMinutes)} estimated</span>
+                  </div>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <button
+                      onClick={() => onStartFocus(topTask)}
+                      className="flex items-center gap-2 bg-gradient-to-r from-primary to-chart-2 text-primary-foreground font-semibold px-5 py-2.5 rounded-xl shadow-md hover:shadow-lg transition-all text-sm"
+                    >
+                      <Play className="w-3.5 h-3.5 fill-current" /> Start Focus Session
+                    </button>
+                    <span className="text-xs text-muted-foreground">
+                      {todaysTasks.filter((t) => !t.done).length} tasks · {formatMins(remainingMinutes)} remaining
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center gap-3 mt-2">
+                  <CheckCircle2 className="w-6 h-6 text-emerald-500" />
+                  <span className="text-lg font-semibold text-emerald-600">All done for today — great work.</span>
+                </div>
+              )}
+            </div>
+
+            {/* Quick stats */}
+            <div className="grid grid-rows-3 gap-3">
+              <QuickStat icon={Flame} label="Consistency streak" value={`${currentStreak} ${currentStreak === 1 ? 'day' : 'days'}`} />
+              <QuickStat icon={Timer} label="Sessions this week" value={sessionsThisWeek} />
+              <QuickStat icon={CheckSquare} label="Completion rate" value={`${todaysCompletionRate}%`} />
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-            {/* Today's tasks */}
-            <div className="lg:col-span-2 bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+            {/* Today's Plan */}
+            <div className="lg:col-span-3 bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-foreground">Today's tasks</h3>
-                <span className="text-xs text-muted-foreground">{todaysItems.length} scheduled</span>
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">Today's Plan</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">No fixed times · estimated effort only</p>
+                </div>
+                <span className="text-xs text-muted-foreground shrink-0">{todaysItems.length} scheduled</span>
               </div>
-              {todaysItems.length === 0 ? (
+              {todaysTasks.length === 0 ? (
                 <div className="px-5 py-10 text-center text-sm text-muted-foreground">
                   Nothing scheduled for today. Check the Planner to see your upcoming workload.
                 </div>
               ) : (
                 <div className="divide-y divide-border">
-                  {todaysItems.map((task) => (
+                  {todaysTasks.map((task) => (
                     <div
                       key={task.key || task.id}
-                      className="flex items-center gap-3 px-5 py-3.5 hover:bg-muted/60 transition-colors"
+                      className={`flex items-center gap-3 px-5 py-3.5 hover:bg-muted/60 transition-colors ${task.done ? 'opacity-50' : ''}`}
                     >
                       <button onClick={() => handleToggle(task)} className="shrink-0">
                         {task.done
@@ -201,7 +224,7 @@ const OverviewSection = ({ onNavigate, onStartFocus }) => {
                           : <Circle className="w-5 h-5 text-border" />}
                       </button>
                       <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: task.planColor }} />
-                      <span className="flex-1 min-w-0 truncate text-sm text-foreground">
+                      <span className={`flex-1 min-w-0 truncate text-sm ${task.done ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
                         {task.title}
                         {task.isSplit && <span className="ml-1.5 text-[10px] text-muted-foreground align-middle">(part)</span>}
                       </span>
@@ -224,7 +247,7 @@ const OverviewSection = ({ onNavigate, onStartFocus }) => {
             </div>
 
             {/* Right column: at-risk plans + deadlines */}
-            <div className="space-y-5">
+            <div className="lg:col-span-2 space-y-5">
               <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
                 <div className="px-5 py-4 border-b border-border flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 text-amber-500" />
@@ -283,7 +306,7 @@ const OverviewSection = ({ onNavigate, onStartFocus }) => {
           {/* High-priority tasks, across all plans */}
           <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden mt-5">
             <div className="px-5 py-4 border-b border-border flex items-center gap-2">
-              <Flag className="w-4 h-4 text-rose-400" />
+              <ListChecks className="w-4 h-4 text-rose-400" />
               <h3 className="text-sm font-semibold text-foreground">High-priority tasks</h3>
             </div>
             {highPriorityTasks.length === 0 ? (
@@ -343,10 +366,13 @@ const OverviewSection = ({ onNavigate, onStartFocus }) => {
 // subscriptions are still connecting ──
 const OverviewSkeleton = () => (
   <div className="animate-pulse space-y-5">
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-      {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} className="h-24 rounded-2xl bg-muted" />
-      ))}
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className="lg:col-span-2 h-40 rounded-2xl bg-muted" />
+      <div className="grid grid-rows-3 gap-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="h-full rounded-2xl bg-muted" />
+        ))}
+      </div>
     </div>
     <div className="h-56 rounded-2xl bg-muted" />
   </div>
